@@ -83,7 +83,7 @@ function SimpleLineChart({ data, dataKey, color = "#f43f5e", referenceLines = []
 // 👇 CHANGE THIS to your Railway URL once deployed online
 // Example: "https://confinement-centre-production.up.railway.app"
 // Keep as "http://localhost:8000" when running locally
-const API_BASE = "http://localhost:8000";
+const API_BASE = "https://confinement-centre-production.up.railway.app";
 
 async function api(method, path, body, token) {
   const res = await fetch(`${API_BASE}${path}`, {
