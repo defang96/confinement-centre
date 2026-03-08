@@ -31,6 +31,10 @@ SESSIONS = {}   # token -> user_id  (in-memory session store)
 
 TODAY = str(date.today())
 
+# Bump this number whenever the schema or seed data changes.
+# It triggers a full drop-and-recreate so Railway always starts fresh.
+SCHEMA_VERSION = 2
+
 
 # ─────────────────────────────────────────────
 # Database Helpers
@@ -48,7 +52,38 @@ def hash_pw(pw: str) -> str:
 
 def init_db():
     conn = get_db()
+
+    # ── Schema migration: drop everything and recreate when version changes ──
+    version_exists = conn.execute(
+        "SELECT name FROM sqlite_master WHERE type='table' AND name='schema_version'"
+    ).fetchone()
+    current_version = 0
+    if version_exists:
+        row = conn.execute("SELECT version FROM schema_version").fetchone()
+        if row:
+            current_version = row[0]
+
+    if current_version < SCHEMA_VERSION:
+        print(f"⚙️  Schema version {current_version} → {SCHEMA_VERSION}: rebuilding database…")
+        conn.executescript("""
+            DROP TABLE IF EXISTS notes;
+            DROP TABLE IF EXISTS activity_bookings;
+            DROP TABLE IF EXISTS receipts;
+            DROP TABLE IF EXISTS inventory;
+            DROP TABLE IF EXISTS activities;
+            DROP TABLE IF EXISTS vitals_records;
+            DROP TABLE IF EXISTS jaundice_records;
+            DROP TABLE IF EXISTS bowel_records;
+            DROP TABLE IF EXISTS feeding_records;
+            DROP TABLE IF EXISTS meal_plans;
+            DROP TABLE IF EXISTS users;
+            DROP TABLE IF EXISTS mothers;
+            DROP TABLE IF EXISTS schema_version;
+        """)
+
     conn.executescript("""
+        CREATE TABLE IF NOT EXISTS schema_version (version INTEGER NOT NULL);
+
         CREATE TABLE IF NOT EXISTS users (
             id           INTEGER PRIMARY KEY AUTOINCREMENT,
             username     TEXT    UNIQUE NOT NULL,
@@ -164,6 +199,13 @@ def init_db():
             is_read      INTEGER DEFAULT 0
         );
     """)
+
+    # Write current schema version
+    if conn.execute("SELECT COUNT(*) FROM schema_version").fetchone()[0] == 0:
+        conn.execute("INSERT INTO schema_version (version) VALUES (?)", (SCHEMA_VERSION,))
+    else:
+        conn.execute("UPDATE schema_version SET version=?", (SCHEMA_VERSION,))
+
     conn.commit()
     conn.close()
 
