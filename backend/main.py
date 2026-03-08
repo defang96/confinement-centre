@@ -54,7 +54,7 @@ def init_db():
             username     TEXT    UNIQUE NOT NULL,
             password_hash TEXT   NOT NULL,
             name         TEXT    NOT NULL,
-            role         TEXT    NOT NULL CHECK(role IN ('mother','nurse','chef','cleaner','sales','admin')),
+            role         TEXT    NOT NULL CHECK(role IN ('mother','nurse','chef','cleaner','sales','admin','account_manager','general_manager','marketing_manager','business_affiliate')),
             mother_id    INTEGER REFERENCES mothers(id)
         );
 
@@ -193,6 +193,10 @@ def seed_db():
         ("cleaner1", hash_pw("pass"),  "Siti Rahimah",   "cleaner", None),
         ("sales1",   hash_pw("pass"),  "Jason Tan",      "sales",   None),
         ("admin",    hash_pw("admin"), "Administrator",  "admin",   None),
+        ("accounts1",  hash_pw("pass"),  "Kevin Ng",       "account_manager",    None),
+        ("gm1",        hash_pw("pass"),  "Dr Tan Wei Ming","general_manager",    None),
+        ("marketing1", hash_pw("pass"),  "Priya Sharma",   "marketing_manager",  None),
+        ("affiliate1", hash_pw("pass"),  "James Loh",      "business_affiliate", None),
     ]:
         c.execute("INSERT INTO users (username,password_hash,name,role,mother_id) VALUES (?,?,?,?,?)", u)
 
@@ -618,7 +622,7 @@ def create_booking(data: dict = Body(...), cu=Depends(get_current_user)):
 @app.get("/api/receipts")
 def get_receipts(cu=Depends(get_current_user)):
     conn = get_db()
-    if cu["role"] == "admin":
+    if cu["role"] in ("admin", "account_manager", "general_manager"):
         rows = conn.execute(
             "SELECT r.*,u.name AS submitter_name FROM receipts r LEFT JOIN users u ON r.submitted_by=u.id ORDER BY r.date DESC"
         ).fetchall()
@@ -647,8 +651,8 @@ def create_receipt(data: dict = Body(...), cu=Depends(get_current_user)):
 
 @app.patch("/api/receipts/{rid}")
 def update_receipt(rid: int, data: dict = Body(...), cu=Depends(get_current_user)):
-    if cu["role"] != "admin":
-        raise HTTPException(403, "Admin only")
+    if cu["role"] not in ("admin", "account_manager", "general_manager"):
+        raise HTTPException(403, "Admin or Account Manager only")
     conn = get_db()
     conn.execute("UPDATE receipts SET status=? WHERE id=?", (data["status"], rid))
     conn.commit()

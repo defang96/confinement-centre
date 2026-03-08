@@ -110,12 +110,16 @@ const patch= (path, body, token)   => api("PATCH", path, body,      token);
 // Role Config
 // ─────────────────────────────────────────────
 const ROLE = {
-  mother:  { label:"Mother",        bg:"bg-rose-500",   light:"bg-rose-50",   text:"text-rose-600",   border:"border-rose-200",   active:"border-rose-500 text-rose-600"   },
-  nurse:   { label:"Nurse",         bg:"bg-blue-500",   light:"bg-blue-50",   text:"text-blue-600",   border:"border-blue-200",   active:"border-blue-500 text-blue-600"   },
-  chef:    { label:"Chef",          bg:"bg-orange-500", light:"bg-orange-50", text:"text-orange-600", border:"border-orange-200", active:"border-orange-500 text-orange-600"},
-  cleaner: { label:"Cleaner",       bg:"bg-green-500",  light:"bg-green-50",  text:"text-green-600",  border:"border-green-200",  active:"border-green-500 text-green-600" },
-  sales:   { label:"Sales Manager", bg:"bg-purple-500", light:"bg-purple-50", text:"text-purple-600", border:"border-purple-200", active:"border-purple-500 text-purple-600"},
-  admin:   { label:"Administrator", bg:"bg-gray-700",   light:"bg-gray-100",  text:"text-gray-700",   border:"border-gray-300",   active:"border-gray-700 text-gray-700"   },
+  mother:              { label:"Mother",             bg:"bg-rose-500",    light:"bg-rose-50",    text:"text-rose-600",    border:"border-rose-200",    active:"border-rose-500 text-rose-600"    },
+  nurse:               { label:"Nurse",              bg:"bg-blue-500",    light:"bg-blue-50",    text:"text-blue-600",    border:"border-blue-200",    active:"border-blue-500 text-blue-600"    },
+  chef:                { label:"Chef",               bg:"bg-orange-500",  light:"bg-orange-50",  text:"text-orange-600",  border:"border-orange-200",  active:"border-orange-500 text-orange-600" },
+  cleaner:             { label:"Cleaner",            bg:"bg-green-500",   light:"bg-green-50",   text:"text-green-600",   border:"border-green-200",   active:"border-green-500 text-green-600"  },
+  sales:               { label:"Sales Manager",      bg:"bg-purple-500",  light:"bg-purple-50",  text:"text-purple-600",  border:"border-purple-200",  active:"border-purple-500 text-purple-600" },
+  admin:               { label:"Administrator",      bg:"bg-gray-700",    light:"bg-gray-100",   text:"text-gray-700",    border:"border-gray-300",    active:"border-gray-700 text-gray-700"    },
+  account_manager:     { label:"Account Manager",    bg:"bg-teal-500",    light:"bg-teal-50",    text:"text-teal-600",    border:"border-teal-200",    active:"border-teal-500 text-teal-600"    },
+  general_manager:     { label:"General Manager",    bg:"bg-indigo-600",  light:"bg-indigo-50",  text:"text-indigo-700",  border:"border-indigo-200",  active:"border-indigo-600 text-indigo-700" },
+  marketing_manager:   { label:"Marketing Manager",  bg:"bg-fuchsia-500", light:"bg-fuchsia-50", text:"text-fuchsia-600", border:"border-fuchsia-200", active:"border-fuchsia-500 text-fuchsia-600"},
+  business_affiliate:  { label:"Business Affiliate", bg:"bg-amber-500",   light:"bg-amber-50",   text:"text-amber-600",   border:"border-amber-200",   active:"border-amber-500 text-amber-600"  },
 };
 
 // ─────────────────────────────────────────────
@@ -190,12 +194,16 @@ function Login({ onLogin }) {
   const [showDemo, setShowDemo] = useState(false);
 
   const demos = [
-    {role:"mother",  u:"mother1",  p:"pass"},
-    {role:"nurse",   u:"nurse1",   p:"pass"},
-    {role:"chef",    u:"chef1",    p:"pass"},
-    {role:"cleaner", u:"cleaner1", p:"pass"},
-    {role:"sales",   u:"sales1",   p:"pass"},
-    {role:"admin",   u:"admin",    p:"admin"},
+    {role:"mother",             u:"mother1",    p:"pass"},
+    {role:"nurse",              u:"nurse1",     p:"pass"},
+    {role:"chef",               u:"chef1",      p:"pass"},
+    {role:"cleaner",            u:"cleaner1",   p:"pass"},
+    {role:"sales",              u:"sales1",     p:"pass"},
+    {role:"admin",              u:"admin",      p:"admin"},
+    {role:"account_manager",    u:"accounts1",  p:"pass"},
+    {role:"general_manager",    u:"gm1",        p:"pass"},
+    {role:"marketing_manager",  u:"marketing1", p:"pass"},
+    {role:"business_affiliate", u:"affiliate1", p:"pass"},
   ];
 
   const tryLogin = async (user, pass) => {
@@ -998,6 +1006,454 @@ function SalesDashboard({ user, onLogout }) {
 // ─────────────────────────────────────────────
 // ADMIN DASHBOARD
 // ─────────────────────────────────────────────
+// ─────────────────────────────────────────────
+// ACCOUNT MANAGER DASHBOARD
+// ─────────────────────────────────────────────
+function AccountManagerDashboard({ user, token, onLogout }) {
+  const [tab, setTab] = useState("overview");
+  const tabs = [
+    {id:"overview", icon:"📊", label:"Overview"},
+    {id:"receipts", icon:"🧾", label:"Claims"},
+    {id:"packages", icon:"💼", label:"Packages"},
+  ];
+  const packages = [
+    {name:"Standard",    price:"RM 8,800",  duration:"28 days", rooms:"Shared",    features:["3 meals/day","Basic herbs","Nurse check-in 2×/day"]},
+    {name:"Premium",     price:"RM 13,500", duration:"28 days", rooms:"Private",   features:["3 meals/day","Full herbal regimen","Nurse check-in 4×/day","Activities access"]},
+    {name:"Elite",       price:"RM 18,000", duration:"28 days", rooms:"Suite",     features:["4 meals/day","Premium herbs","24hr nurse","All activities","Lactation consultant"]},
+    {name:"Extended",    price:"RM 22,000", duration:"42 days", rooms:"Suite",     features:["All Elite benefits","Extended stay","Nutritionist","Postnatal physio"]},
+  ];
+  return (
+    <div>
+      <Navbar user={user} onLogout={onLogout} title="Account Manager" />
+      <TabBar tabs={tabs} active={tab} onChange={setTab} activeClass={ROLE.account_manager.active} />
+      <div className="pb-6">
+        {tab==="overview" && <AccountManagerOverview token={token} />}
+        {tab==="receipts" && <AdminReceipts token={token} />}
+        {tab==="packages" && (
+          <div className="p-4 space-y-3">
+            <SectionTitle>Package Tiers & Pricing</SectionTitle>
+            {packages.map(pkg=>(
+              <Card key={pkg.name}>
+                <div className="flex justify-between items-start mb-2">
+                  <div>
+                    <p className="font-bold text-gray-800 text-base">{pkg.name}</p>
+                    <p className="text-xs text-gray-400">{pkg.duration} · {pkg.rooms} room</p>
+                  </div>
+                  <p className="text-lg font-bold text-teal-600">{pkg.price}</p>
+                </div>
+                <div className="flex flex-wrap gap-1 mt-2">
+                  {pkg.features.map(f=><span key={f} className="text-xs bg-teal-50 text-teal-700 border border-teal-100 rounded-full px-2 py-0.5">{f}</span>)}
+                </div>
+              </Card>
+            ))}
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}
+
+function AccountManagerOverview({ token }) {
+  const [receipts, setReceipts] = useState([]);
+  const [mothers, setMothers] = useState([]);
+  useEffect(() => {
+    get("/api/receipts", token).then(setReceipts).catch(()=>{});
+    get("/api/mothers", token).then(setMothers).catch(()=>{});
+  }, []);
+  const approved = receipts.filter(r=>r.status==="approved").reduce((s,r)=>s+r.amount,0);
+  const pending  = receipts.filter(r=>r.status==="pending");
+  const pkgRevenue = mothers.length * 13500; // avg package value
+  const stats = [
+    {icon:"💰", label:"Est. Package Revenue",  val:`RM ${pkgRevenue.toLocaleString()}`, bg:"bg-teal-50",   txt:"text-teal-600"},
+    {icon:"✅", label:"Approved Expenses",     val:`RM ${approved.toFixed(0)}`,         bg:"bg-green-50",  txt:"text-green-600"},
+    {icon:"⏳", label:"Pending Claims",        val:pending.length,                       bg:"bg-amber-50",  txt:"text-amber-600"},
+    {icon:"🏠", label:"Active Residents",      val:mothers.length,                       bg:"bg-blue-50",   txt:"text-blue-600"},
+  ];
+  return (
+    <div className="p-4 space-y-4">
+      <SectionTitle>Financial Overview</SectionTitle>
+      <div className="grid grid-cols-2 gap-3">
+        {stats.map(s=>(
+          <Card key={s.label} className={s.bg}>
+            <p className="text-2xl">{s.icon}</p>
+            <p className={`text-2xl font-bold mt-1 ${s.txt}`}>{s.val}</p>
+            <p className="text-xs text-gray-500 mt-0.5">{s.label}</p>
+          </Card>
+        ))}
+      </div>
+      {pending.length > 0 && (
+        <>
+          <SectionTitle>Pending Approvals</SectionTitle>
+          {pending.map(r=>(
+            <Card key={r.id} className="border-amber-100 bg-amber-50">
+              <p className="text-sm font-semibold text-gray-800">{r.description}</p>
+              <div className="flex justify-between mt-1">
+                <p className="text-xs text-gray-400">{r.submitter_name} · {r.date}</p>
+                <p className="text-sm font-bold text-amber-600">RM {r.amount.toFixed(2)}</p>
+              </div>
+            </Card>
+          ))}
+        </>
+      )}
+    </div>
+  );
+}
+
+
+// ─────────────────────────────────────────────
+// GENERAL MANAGER DASHBOARD
+// ─────────────────────────────────────────────
+function GeneralManagerDashboard({ user, token, onLogout }) {
+  const [tab, setTab] = useState("overview");
+  const tabs = [
+    {id:"overview",   icon:"📊", label:"Overview"},
+    {id:"operations", icon:"🏠", label:"Operations"},
+    {id:"staff",      icon:"👥", label:"Staff"},
+  ];
+  return (
+    <div>
+      <Navbar user={user} onLogout={onLogout} title="General Manager" />
+      <TabBar tabs={tabs} active={tab} onChange={setTab} activeClass={ROLE.general_manager.active} />
+      <div className="pb-6">
+        {tab==="overview"   && <GMOverview token={token} />}
+        {tab==="operations" && <GMOperations token={token} />}
+        {tab==="staff"      && <GMStaff token={token} />}
+      </div>
+    </div>
+  );
+}
+
+function GMOverview({ token }) {
+  const [mothers, setMothers] = useState([]);
+  const [receipts, setReceipts] = useState([]);
+  useEffect(() => {
+    get("/api/mothers", token).then(setMothers).catch(()=>{});
+    get("/api/receipts", token).then(setReceipts).catch(()=>{});
+  }, []);
+  const approved = receipts.filter(r=>r.status==="approved").reduce((s,r)=>s+r.amount,0);
+  const stats = [
+    {icon:"🤱", label:"Current Residents",    val:mothers.length,              bg:"bg-indigo-50", txt:"text-indigo-700"},
+    {icon:"💰", label:"Est. Monthly Revenue", val:`RM ${(mothers.length*13500).toLocaleString()}`, bg:"bg-green-50", txt:"text-green-600"},
+    {icon:"✅", label:"Approved Expenses",    val:`RM ${approved.toFixed(0)}`, bg:"bg-blue-50",   txt:"text-blue-600"},
+    {icon:"📋", label:"Pending Claims",       val:receipts.filter(r=>r.status==="pending").length, bg:"bg-amber-50", txt:"text-amber-600"},
+  ];
+  return (
+    <div className="p-4 space-y-4">
+      <SectionTitle>Business at a Glance</SectionTitle>
+      <div className="grid grid-cols-2 gap-3">
+        {stats.map(s=>(
+          <Card key={s.label} className={s.bg}>
+            <p className="text-2xl">{s.icon}</p>
+            <p className={`text-2xl font-bold mt-1 ${s.txt}`}>{s.val}</p>
+            <p className="text-xs text-gray-500 mt-0.5">{s.label}</p>
+          </Card>
+        ))}
+      </div>
+      <SectionTitle>Resident Summary</SectionTitle>
+      {mothers.map(m=>(
+        <Card key={m.id}>
+          <div className="flex justify-between">
+            <div>
+              <p className="text-sm font-semibold text-gray-800">{m.name}</p>
+              <p className="text-xs text-gray-400">Room {m.room} · Baby: {m.baby_name}</p>
+            </div>
+            <div className="text-right text-xs text-gray-400">
+              <p>In: {m.check_in}</p>
+              <p>Out: {m.check_out}</p>
+            </div>
+          </div>
+        </Card>
+      ))}
+    </div>
+  );
+}
+
+function GMOperations({ token }) {
+  const [mothers, setMothers] = useState([]);
+  const [inventory, setInventory] = useState([]);
+  useEffect(() => {
+    get("/api/mothers", token).then(setMothers).catch(()=>{});
+    get("/api/inventory", token).then(setInventory).catch(()=>{});
+  }, []);
+  const lowStock = inventory.filter(i=>i.quantity<=i.low_alert);
+  const totalRooms = 10;
+  const occupied = mothers.length;
+  const occupancy = Math.round((occupied/totalRooms)*100);
+  return (
+    <div className="p-4 space-y-4">
+      <SectionTitle>Occupancy</SectionTitle>
+      <Card>
+        <div className="flex justify-between items-center mb-2">
+          <p className="text-sm font-semibold text-gray-700">Room Occupancy</p>
+          <p className="text-lg font-bold text-indigo-700">{occupancy}%</p>
+        </div>
+        <div className="w-full bg-gray-100 rounded-full h-3">
+          <div className="bg-indigo-500 h-3 rounded-full" style={{width:`${occupancy}%`}}></div>
+        </div>
+        <p className="text-xs text-gray-400 mt-2">{occupied} occupied · {totalRooms-occupied} available of {totalRooms} total rooms</p>
+      </Card>
+      {lowStock.length > 0 && (
+        <>
+          <SectionTitle>⚠️ Low Stock Alerts</SectionTitle>
+          {lowStock.map(i=>(
+            <Card key={i.id} className="border-red-100 bg-red-50">
+              <div className="flex justify-between">
+                <p className="text-sm font-semibold text-gray-800">{i.item}</p>
+                <p className="text-sm font-bold text-red-500">{i.quantity} {i.unit} left</p>
+              </div>
+              <p className="text-xs text-gray-400 mt-0.5">Alert threshold: {i.low_alert} {i.unit}</p>
+            </Card>
+          ))}
+        </>
+      )}
+      <SectionTitle>Inventory Status</SectionTitle>
+      {inventory.map(i=>(
+        <Card key={i.id}>
+          <div className="flex justify-between items-center">
+            <p className="text-sm text-gray-800">{i.item}</p>
+            <p className={`text-sm font-semibold ${i.quantity<=i.low_alert?"text-red-500":"text-green-600"}`}>{i.quantity} {i.unit}</p>
+          </div>
+        </Card>
+      ))}
+    </div>
+  );
+}
+
+function GMStaff({ token }) {
+  const [users, setUsers] = useState([]);
+  useEffect(() => { get("/api/users", token).then(setUsers).catch(()=>{}); }, []);
+  const staffRoles = ["nurse","chef","cleaner","sales","account_manager","general_manager","marketing_manager","business_affiliate"];
+  const staff = users.filter(u=>staffRoles.includes(u.role));
+  const byRole = staffRoles.reduce((acc,r)=>({...acc,[r]:staff.filter(u=>u.role===r)}),[]);
+  return (
+    <div className="p-4 space-y-4">
+      <SectionTitle>Staff Directory</SectionTitle>
+      <div className="grid grid-cols-2 gap-3">
+        {staffRoles.filter(r=>byRole[r]?.length).map(r=>{const c=ROLE[r]; return (
+          <Card key={r} className={c.light}>
+            <p className="text-2xl">{byRole[r]?.length||0}</p>
+            <p className={`text-xs font-semibold mt-1 ${c.text}`}>{c.label}</p>
+          </Card>
+        );})}
+      </div>
+      <SectionTitle>All Staff</SectionTitle>
+      {staff.map(u=>{const c=ROLE[u.role]||ROLE.admin; return (
+        <Card key={u.id}>
+          <div className="flex items-center gap-3">
+            <div className={`w-10 h-10 rounded-full ${c.bg} flex items-center justify-center text-white font-bold text-sm`}>{u.name[0]}</div>
+            <div>
+              <p className="text-sm font-semibold text-gray-800">{u.name}</p>
+              <span className={`text-xs font-medium ${c.text}`}>{c.label}</span>
+            </div>
+          </div>
+        </Card>
+      );})}
+    </div>
+  );
+}
+
+
+// ─────────────────────────────────────────────
+// MARKETING MANAGER DASHBOARD
+// ─────────────────────────────────────────────
+function MarketingManagerDashboard({ user, token, onLogout }) {
+  const [tab, setTab] = useState("leads");
+  const tabs = [
+    {id:"leads",     icon:"📋", label:"Leads"},
+    {id:"packages",  icon:"💼", label:"Packages"},
+    {id:"analytics", icon:"📈", label:"Analytics"},
+  ];
+  const leads = [
+    {id:1, name:"Jennifer Lim",   due:"Apr 2026", pkg:"Premium",  status:"Interested",  source:"Instagram",  phone:"+60 12-345 6789"},
+    {id:2, name:"Rachel Tan",     due:"May 2026", pkg:"Standard", status:"Follow-up",   source:"Referral",   phone:"+60 19-876 5432"},
+    {id:3, name:"Amy Chong",      due:"Jun 2026", pkg:"Elite",    status:"Interested",  source:"Facebook",   phone:"+60 11-222 3344"},
+    {id:4, name:"Nur Fadzillah",  due:"Apr 2026", pkg:"Standard", status:"Quoted",      source:"Google",     phone:"+60 17-555 6677"},
+    {id:5, name:"Grace Yeo",      due:"Jul 2026", pkg:"Premium",  status:"Negotiating", source:"Referral",   phone:"+60 16-888 9900"},
+  ];
+  const statusColor = {
+    "Interested":"bg-blue-100 text-blue-600","Follow-up":"bg-yellow-100 text-yellow-700",
+    "Quoted":"bg-purple-100 text-purple-600","Negotiating":"bg-orange-100 text-orange-600","Converted":"bg-green-100 text-green-600"
+  };
+  const packages = [
+    {name:"Standard", price:"RM 8,800", highlight:"Best value", color:"bg-purple-50"},
+    {name:"Premium",  price:"RM 13,500",highlight:"Most popular",color:"bg-fuchsia-50"},
+    {name:"Elite",    price:"RM 18,000",highlight:"All inclusive",color:"bg-pink-50"},
+    {name:"Extended", price:"RM 22,000",highlight:"42-day plan", color:"bg-rose-50"},
+  ];
+  const channels = [
+    {src:"Instagram", leads:18, color:"bg-fuchsia-100 text-fuchsia-600"},
+    {src:"Facebook",  leads:12, color:"bg-blue-100 text-blue-600"},
+    {src:"Referral",  leads:15, color:"bg-green-100 text-green-600"},
+    {src:"Google",    leads:9,  color:"bg-amber-100 text-amber-600"},
+    {src:"Walk-in",   leads:4,  color:"bg-gray-100 text-gray-600"},
+  ];
+  return (
+    <div>
+      <Navbar user={user} onLogout={onLogout} title="Marketing Manager" />
+      <TabBar tabs={tabs} active={tab} onChange={setTab} activeClass={ROLE.marketing_manager.active} />
+      <div className="pb-6">
+        {tab==="leads" && (
+          <div className="p-4 space-y-3">
+            <div className="grid grid-cols-3 gap-2">
+              <Card className="bg-fuchsia-50 text-center"><p className="text-xl font-bold text-fuchsia-600">{leads.length}</p><p className="text-xs text-gray-500">Total Leads</p></Card>
+              <Card className="bg-green-50 text-center"><p className="text-xl font-bold text-green-600">2</p><p className="text-xs text-gray-500">Converted</p></Card>
+              <Card className="bg-amber-50 text-center"><p className="text-xl font-bold text-amber-600">{leads.filter(l=>l.status==="Follow-up").length}</p><p className="text-xs text-gray-500">Follow-up</p></Card>
+            </div>
+            <SectionTitle>Lead Pipeline</SectionTitle>
+            {leads.map(l=>(
+              <Card key={l.id}>
+                <div className="flex justify-between items-start mb-1">
+                  <div>
+                    <p className="text-sm font-semibold text-gray-800">{l.name}</p>
+                    <p className="text-xs text-gray-400">Due: {l.due} · {l.pkg} Package · via {l.source}</p>
+                    <p className="text-xs text-gray-400 mt-0.5">{l.phone}</p>
+                  </div>
+                  <span className={`text-xs px-2 py-0.5 rounded-full font-medium ${statusColor[l.status]||"bg-gray-100 text-gray-600"}`}>{l.status}</span>
+                </div>
+              </Card>
+            ))}
+          </div>
+        )}
+        {tab==="packages" && (
+          <div className="p-4 space-y-3">
+            <SectionTitle>Packages for Marketing</SectionTitle>
+            {packages.map(pkg=>(
+              <Card key={pkg.name} className={pkg.color}>
+                <div className="flex justify-between items-center">
+                  <div>
+                    <p className="font-bold text-gray-800">{pkg.name}</p>
+                    <p className="text-xs text-fuchsia-600 font-medium">{pkg.highlight}</p>
+                  </div>
+                  <p className="text-lg font-bold text-gray-700">{pkg.price}</p>
+                </div>
+              </Card>
+            ))}
+          </div>
+        )}
+        {tab==="analytics" && (
+          <div className="p-4 space-y-4">
+            <SectionTitle>Lead Sources</SectionTitle>
+            {channels.map(ch=>(
+              <div key={ch.src} className="flex items-center gap-3">
+                <div className="w-24 text-xs text-gray-600 font-medium">{ch.src}</div>
+                <div className="flex-1 bg-gray-100 rounded-full h-3">
+                  <div className={`h-3 rounded-full ${ch.color.split(" ")[0]}`} style={{width:`${(ch.leads/58)*100}%`}}></div>
+                </div>
+                <div className="w-10 text-xs text-right font-semibold text-gray-700">{ch.leads}</div>
+              </div>
+            ))}
+            <SectionTitle>Key Metrics</SectionTitle>
+            <div className="grid grid-cols-2 gap-3">
+              <Card className="bg-fuchsia-50"><p className="text-2xl font-bold text-fuchsia-600">34%</p><p className="text-xs text-gray-500">Conversion Rate</p></Card>
+              <Card className="bg-indigo-50"><p className="text-2xl font-bold text-indigo-600">RM 320</p><p className="text-xs text-gray-500">Avg. Cost per Lead</p></Card>
+              <Card className="bg-green-50"><p className="text-2xl font-bold text-green-600">58</p><p className="text-xs text-gray-500">Total Leads (MTD)</p></Card>
+              <Card className="bg-pink-50"><p className="text-2xl font-bold text-pink-600">4.8★</p><p className="text-xs text-gray-500">Avg. Rating</p></Card>
+            </div>
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}
+
+
+// ─────────────────────────────────────────────
+// BUSINESS AFFILIATE DASHBOARD
+// ─────────────────────────────────────────────
+function BusinessAffiliateDashboard({ user, onLogout }) {
+  const [tab, setTab] = useState("referrals");
+  const tabs = [
+    {id:"referrals",  icon:"👥", label:"Referrals"},
+    {id:"commission", icon:"💵", label:"Commission"},
+  ];
+  const referrals = [
+    {id:1, name:"Sarah Koh",    pkg:"Premium",  date:"2026-01-15", status:"Checked-in",  commission:675,  paid:true},
+    {id:2, name:"Mei Ling Tan", pkg:"Standard", date:"2026-02-03", status:"Checked-in",  commission:440,  paid:true},
+    {id:3, name:"Vimala Raj",   pkg:"Elite",    date:"2026-03-01", status:"Confirmed",   commission:900,  paid:false},
+    {id:4, name:"Grace Ooi",    pkg:"Premium",  date:"2026-03-10", status:"Interested",  commission:675,  paid:false},
+  ];
+  const statusColor = {"Checked-in":"bg-green-100 text-green-700","Confirmed":"bg-blue-100 text-blue-700","Interested":"bg-amber-100 text-amber-700"};
+  const earned = referrals.filter(r=>r.paid).reduce((s,r)=>s+r.commission,0);
+  const pending = referrals.filter(r=>!r.paid).reduce((s,r)=>s+r.commission,0);
+  const tiers = [
+    {tier:"Bronze", range:"1–5 referrals/yr",   rate:"5%",  bg:"bg-amber-50",   text:"text-amber-700"},
+    {tier:"Silver", range:"6–12 referrals/yr",  rate:"6.5%",bg:"bg-gray-100",   text:"text-gray-600"},
+    {tier:"Gold",   range:"13+ referrals/yr",   rate:"8%",  bg:"bg-yellow-50",  text:"text-yellow-700"},
+  ];
+  return (
+    <div>
+      <Navbar user={user} onLogout={onLogout} title="Business Affiliate" />
+      <TabBar tabs={tabs} active={tab} onChange={setTab} activeClass={ROLE.business_affiliate.active} />
+      <div className="pb-6">
+        {tab==="referrals" && (
+          <div className="p-4 space-y-3">
+            <div className="grid grid-cols-2 gap-3">
+              <Card className="bg-amber-50"><p className="text-2xl font-bold text-amber-600">{referrals.length}</p><p className="text-xs text-gray-500">Total Referrals</p></Card>
+              <Card className="bg-green-50"><p className="text-2xl font-bold text-green-600">{referrals.filter(r=>r.status==="Checked-in").length}</p><p className="text-xs text-gray-500">Checked-in</p></Card>
+            </div>
+            <SectionTitle>My Referrals</SectionTitle>
+            {referrals.map(r=>(
+              <Card key={r.id}>
+                <div className="flex justify-between items-start">
+                  <div>
+                    <p className="text-sm font-semibold text-gray-800">{r.name}</p>
+                    <p className="text-xs text-gray-400">{r.pkg} Package · Referred: {r.date}</p>
+                  </div>
+                  <div className="text-right">
+                    <span className={`text-xs px-2 py-0.5 rounded-full font-medium ${statusColor[r.status]||"bg-gray-100 text-gray-600"}`}>{r.status}</span>
+                    <p className={`text-xs font-semibold mt-1 ${r.paid?"text-green-600":"text-amber-500"}`}>{r.paid?"Paid":"Pending"}</p>
+                  </div>
+                </div>
+                <p className="text-sm font-bold text-amber-600 mt-1">Commission: RM {r.commission.toFixed(0)}</p>
+              </Card>
+            ))}
+          </div>
+        )}
+        {tab==="commission" && (
+          <div className="p-4 space-y-4">
+            <div className="grid grid-cols-2 gap-3">
+              <Card className="bg-green-50"><p className="text-2xl font-bold text-green-600">RM {earned.toFixed(0)}</p><p className="text-xs text-gray-500">Paid Out</p></Card>
+              <Card className="bg-amber-50"><p className="text-2xl font-bold text-amber-600">RM {pending.toFixed(0)}</p><p className="text-xs text-gray-500">Pending Payout</p></Card>
+            </div>
+            <Card className="bg-amber-50 border-amber-100">
+              <p className="text-xs text-amber-700 font-semibold mb-1">Your Status: 🥉 Bronze Tier</p>
+              <p className="text-xs text-gray-500">Current rate: 5% of package value. Refer 6+ clients/year to reach Silver.</p>
+            </Card>
+            <SectionTitle>Commission Tiers</SectionTitle>
+            {tiers.map(t=>(
+              <Card key={t.tier} className={t.bg}>
+                <div className="flex justify-between items-center">
+                  <div>
+                    <p className={`font-bold ${t.text}`}>{t.tier}</p>
+                    <p className="text-xs text-gray-500">{t.range}</p>
+                  </div>
+                  <p className={`text-xl font-bold ${t.text}`}>{t.rate}</p>
+                </div>
+              </Card>
+            ))}
+            <SectionTitle>Payout History</SectionTitle>
+            {referrals.filter(r=>r.paid).map(r=>(
+              <Card key={r.id}>
+                <div className="flex justify-between">
+                  <div>
+                    <p className="text-sm font-semibold text-gray-800">{r.name}</p>
+                    <p className="text-xs text-gray-400">{r.pkg} Package · {r.date}</p>
+                  </div>
+                  <p className="text-sm font-bold text-green-600">+RM {r.commission.toFixed(0)}</p>
+                </div>
+              </Card>
+            ))}
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}
+
+
+// ─────────────────────────────────────────────
+// ADMIN DASHBOARD
+// ─────────────────────────────────────────────
 function AdminDashboard({ user, token, onLogout }) {
   const [tab, setTab] = useState("overview");
   const [viewAs, setViewAs] = useState(null);
@@ -1005,11 +1461,15 @@ function AdminDashboard({ user, token, onLogout }) {
 
   if (viewAs) {
     const u2 = {...viewAs, onLogout:()=>setViewAs(null)};
-    if (u2.role==="mother")  return <MotherDashboard  user={u2} token={token} onLogout={u2.onLogout} />;
-    if (u2.role==="nurse")   return <NurseDashboard   user={u2} token={token} onLogout={u2.onLogout} />;
-    if (u2.role==="chef")    return <ChefDashboard    user={u2} token={token} onLogout={u2.onLogout} />;
-    if (u2.role==="cleaner") return <CleanerDashboard user={u2} onLogout={u2.onLogout} />;
-    if (u2.role==="sales")   return <SalesDashboard   user={u2} onLogout={u2.onLogout} />;
+    if (u2.role==="mother")             return <MotherDashboard           user={u2} token={token} onLogout={u2.onLogout} />;
+    if (u2.role==="nurse")              return <NurseDashboard            user={u2} token={token} onLogout={u2.onLogout} />;
+    if (u2.role==="chef")               return <ChefDashboard             user={u2} token={token} onLogout={u2.onLogout} />;
+    if (u2.role==="cleaner")            return <CleanerDashboard          user={u2} onLogout={u2.onLogout} />;
+    if (u2.role==="sales")              return <SalesDashboard            user={u2} onLogout={u2.onLogout} />;
+    if (u2.role==="account_manager")    return <AccountManagerDashboard   user={u2} token={token} onLogout={u2.onLogout} />;
+    if (u2.role==="general_manager")    return <GeneralManagerDashboard   user={u2} token={token} onLogout={u2.onLogout} />;
+    if (u2.role==="marketing_manager")  return <MarketingManagerDashboard user={u2} token={token} onLogout={u2.onLogout} />;
+    if (u2.role==="business_affiliate") return <BusinessAffiliateDashboard user={u2} onLogout={u2.onLogout} />;
   }
 
   return (
@@ -1166,13 +1626,17 @@ function App() {
   const props = { user, token, onLogout: handleLogout };
 
   switch (user.role) {
-    case "mother":  return <MotherDashboard  {...props} />;
-    case "nurse":   return <NurseDashboard   {...props} />;
-    case "chef":    return <ChefDashboard    {...props} />;
-    case "cleaner": return <CleanerDashboard {...props} />;
-    case "sales":   return <SalesDashboard   {...props} />;
-    case "admin":   return <AdminDashboard   {...props} />;
-    default:        return <Login onLogin={handleLogin} />;
+    case "mother":             return <MotherDashboard           {...props} />;
+    case "nurse":              return <NurseDashboard            {...props} />;
+    case "chef":               return <ChefDashboard             {...props} />;
+    case "cleaner":            return <CleanerDashboard          {...props} />;
+    case "sales":              return <SalesDashboard            {...props} />;
+    case "admin":              return <AdminDashboard            {...props} />;
+    case "account_manager":    return <AccountManagerDashboard   {...props} />;
+    case "general_manager":    return <GeneralManagerDashboard   {...props} />;
+    case "marketing_manager":  return <MarketingManagerDashboard {...props} />;
+    case "business_affiliate": return <BusinessAffiliateDashboard {...props} />;
+    default:                   return <Login onLogin={handleLogin} />;
   }
 }
 
