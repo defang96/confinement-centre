@@ -1,0 +1,1182 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>月子中心 — Confinement Care Centre</title>
+  <script src="https://unpkg.com/react@18/umd/react.development.js"></script>
+  <script src="https://unpkg.com/react-dom@18/umd/react-dom.development.js"></script>
+  <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <style>
+    body { margin: 0; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; background: #f9fafb; }
+    * { box-sizing: border-box; }
+    ::-webkit-scrollbar { width: 4px; height: 4px; }
+    ::-webkit-scrollbar-thumb { background: #e5e7eb; border-radius: 4px; }
+  </style>
+</head>
+<body>
+<div id="root"></div>
+
+<script type="text/babel">
+const { useState, useEffect, useCallback } = React;
+
+// Simple SVG Line Chart (no external library needed)
+function SimpleLineChart({ data, dataKey, color = "#f43f5e", referenceLines = [] }) {
+  if (!data || data.length === 0) return null;
+  const W = 320, H = 150, PL = 30, PR = 10, PT = 10, PB = 25;
+  const vals = data.map(d => d[dataKey]);
+  const allVals = [...vals, ...referenceLines.map(r => r.y)];
+  const minV = Math.min(...allVals) - 1;
+  const maxV = Math.max(...allVals) + 1;
+  const gW = W - PL - PR, gH = H - PT - PB;
+  const xPos = i => PL + (i / (data.length - 1)) * gW;
+  const yPos = v => PT + (1 - (v - minV) / (maxV - minV)) * gH;
+  const points = data.map((d, i) => `${xPos(i)},${yPos(d[dataKey])}`).join(" ");
+  const [tip, setTip] = useState(null);
+  return (
+    <svg viewBox={`0 0 ${W} ${H}`} width="100%" style={{overflow:"visible"}}>
+      {/* Grid lines */}
+      {[0,0.25,0.5,0.75,1].map(t => (
+        <line key={t} x1={PL} x2={W-PR} y1={PT+t*gH} y2={PT+t*gH} stroke="#f0f0f0" strokeWidth="1"/>
+      ))}
+      {/* Reference lines */}
+      {referenceLines.map(r => (
+        <g key={r.y}>
+          <line x1={PL} x2={W-PR} y1={yPos(r.y)} y2={yPos(r.y)} stroke={r.color} strokeWidth="1.5" strokeDasharray="4 2"/>
+          <text x={W-PR-2} y={yPos(r.y)-3} fill={r.color} fontSize="8" textAnchor="end">{r.label}</text>
+        </g>
+      ))}
+      {/* Line */}
+      <polyline points={points} fill="none" stroke={color} strokeWidth="2.5" strokeLinejoin="round"/>
+      {/* Dots + tooltip triggers */}
+      {data.map((d, i) => (
+        <g key={i}>
+          <circle cx={xPos(i)} cy={yPos(d[dataKey])} r="4" fill={color} stroke="white" strokeWidth="1.5"
+            onMouseEnter={()=>setTip({x:xPos(i),y:yPos(d[dataKey]),d})}
+            onMouseLeave={()=>setTip(null)} style={{cursor:"pointer"}}/>
+        </g>
+      ))}
+      {/* Tooltip */}
+      {tip && (
+        <g>
+          <rect x={tip.x+6} y={tip.y-20} width="70" height="20" rx="4" fill="#1f2937"/>
+          <text x={tip.x+11} y={tip.y-7} fill="white" fontSize="9">{tip.d.date}: {tip.d[dataKey]}</text>
+        </g>
+      )}
+      {/* X axis labels */}
+      {data.map((d, i) => (
+        (i % Math.ceil(data.length/5) === 0 || i === data.length-1) &&
+        <text key={i} x={xPos(i)} y={H-5} textAnchor="middle" fontSize="8" fill="#9ca3af">{d.date}</text>
+      ))}
+      {/* Y axis labels */}
+      {[minV, (minV+maxV)/2, maxV].map(v => (
+        <text key={v} x={PL-3} y={yPos(v)+3} textAnchor="end" fontSize="8" fill="#9ca3af">{Math.round(v)}</text>
+      ))}
+    </svg>
+  );
+}
+
+// ─────────────────────────────────────────────
+// API Layer
+// ─────────────────────────────────────────────
+// 👇 CHANGE THIS to your Railway URL once deployed online
+// Example: "https://confinement-centre-production.up.railway.app"
+// Keep as "http://localhost:8000" when running locally
+const API_BASE = "http://localhost:8000";
+
+async function api(method, path, body, token) {
+  const res = await fetch(`${API_BASE}${path}`, {
+    method,
+    headers: {
+      "Content-Type": "application/json",
+      ...(token ? { Authorization: `Bearer ${token}` } : {}),
+    },
+    ...(body !== undefined ? { body: JSON.stringify(body) } : {}),
+  });
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({ detail: "Network error" }));
+    throw new Error(err.detail || "API error");
+  }
+  return res.json();
+}
+
+const get  = (path, token)        => api("GET",   path, undefined, token);
+const post = (path, body, token)   => api("POST",  path, body,      token);
+const put  = (path, body, token)   => api("PUT",   path, body,      token);
+const patch= (path, body, token)   => api("PATCH", path, body,      token);
+
+// ─────────────────────────────────────────────
+// Role Config
+// ─────────────────────────────────────────────
+const ROLE = {
+  mother:  { label:"Mother",        bg:"bg-rose-500",   light:"bg-rose-50",   text:"text-rose-600",   border:"border-rose-200",   active:"border-rose-500 text-rose-600"   },
+  nurse:   { label:"Nurse",         bg:"bg-blue-500",   light:"bg-blue-50",   text:"text-blue-600",   border:"border-blue-200",   active:"border-blue-500 text-blue-600"   },
+  chef:    { label:"Chef",          bg:"bg-orange-500", light:"bg-orange-50", text:"text-orange-600", border:"border-orange-200", active:"border-orange-500 text-orange-600"},
+  cleaner: { label:"Cleaner",       bg:"bg-green-500",  light:"bg-green-50",  text:"text-green-600",  border:"border-green-200",  active:"border-green-500 text-green-600" },
+  sales:   { label:"Sales Manager", bg:"bg-purple-500", light:"bg-purple-50", text:"text-purple-600", border:"border-purple-200", active:"border-purple-500 text-purple-600"},
+  admin:   { label:"Administrator", bg:"bg-gray-700",   light:"bg-gray-100",  text:"text-gray-700",   border:"border-gray-300",   active:"border-gray-700 text-gray-700"   },
+};
+
+// ─────────────────────────────────────────────
+// Shared UI Components
+// ─────────────────────────────────────────────
+function Card({ children, className="" }) {
+  return <div className={`bg-white rounded-2xl shadow-sm border border-gray-100 p-4 ${className}`}>{children}</div>;
+}
+function SectionTitle({ children }) {
+  return <h2 className="text-xs font-semibold text-gray-500 uppercase tracking-wider mb-3">{children}</h2>;
+}
+function Badge({ status }) {
+  const m = { confirmed:"bg-green-100 text-green-700", pending:"bg-yellow-100 text-yellow-700", approved:"bg-green-100 text-green-700", rejected:"bg-red-100 text-red-700" };
+  return <span className={`px-2 py-0.5 rounded-full text-xs font-medium ${m[status]||"bg-gray-100 text-gray-500"}`}>{status}</span>;
+}
+function Navbar({ user, onLogout, title }) {
+  const c = ROLE[user.role];
+  return (
+    <div className={`${c.bg} text-white px-4 py-3 flex items-center justify-between sticky top-0 z-50 shadow-md`}>
+      <div>
+        <div className="font-bold text-sm">{title}</div>
+        <div className="text-xs opacity-80">{user.name} · {c.label}</div>
+      </div>
+      <button onClick={onLogout} className="text-xs bg-white bg-opacity-20 px-3 py-1.5 rounded-full hover:bg-opacity-30">Sign Out</button>
+    </div>
+  );
+}
+function TabBar({ tabs, active, onChange, activeClass }) {
+  return (
+    <div className="flex overflow-x-auto border-b border-gray-100 bg-white">
+      {tabs.map(t => (
+        <button key={t.id} onClick={() => onChange(t.id)}
+          className={`flex-shrink-0 px-3 py-3 text-xs font-medium border-b-2 whitespace-nowrap ${active===t.id ? `${activeClass} font-semibold` : "border-transparent text-gray-400"}`}>
+          {t.icon} {t.label}
+        </button>
+      ))}
+    </div>
+  );
+}
+function Inp({ ...p }) {
+  return <input {...p} className="w-full border border-gray-200 rounded-xl px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-rose-200" />;
+}
+function Sel({ children, ...p }) {
+  return <select {...p} className="w-full border border-gray-200 rounded-xl px-3 py-2 text-sm bg-white focus:outline-none focus:ring-2 focus:ring-rose-200">{children}</select>;
+}
+function Txt({ ...p }) {
+  return <textarea {...p} className="w-full border border-gray-200 rounded-xl px-3 py-2 text-sm resize-none focus:outline-none focus:ring-2 focus:ring-rose-200" />;
+}
+function Label({ children }) { return <label className="text-xs font-medium text-gray-500">{children}</label>; }
+function Field({ label, children }) { return <div><Label>{label}</Label><div className="mt-1">{children}</div></div>; }
+function Btn({ children, onClick, color="rose", cls="" }) {
+  const c = { rose:"bg-rose-500 hover:bg-rose-600", blue:"bg-blue-500 hover:bg-blue-600", orange:"bg-orange-500 hover:bg-orange-600", gray:"bg-gray-700 hover:bg-gray-800", green:"bg-green-500 hover:bg-green-600" };
+  return <button onClick={onClick} className={`w-full ${c[color]} text-white rounded-xl py-2.5 font-medium text-sm ${cls}`}>{children}</button>;
+}
+function Alert({ msg, type="success" }) {
+  if (!msg) return null;
+  const c = type==="error" ? "bg-red-50 border-red-200 text-red-700" : "bg-green-50 border-green-200 text-green-700";
+  return <div className={`border rounded-xl p-3 text-sm font-medium ${c}`}>{type==="success"?"✅":"❌"} {msg}</div>;
+}
+function Spinner() {
+  return <div className="flex items-center justify-center py-10"><div className="w-8 h-8 border-4 border-rose-200 border-t-rose-500 rounded-full animate-spin"></div></div>;
+}
+
+// ─────────────────────────────────────────────
+// Login
+// ─────────────────────────────────────────────
+function Login({ onLogin }) {
+  const [u, setU] = useState("");
+  const [p, setP] = useState("");
+  const [err, setErr] = useState("");
+  const [loading, setLoading] = useState(false);
+  const [showDemo, setShowDemo] = useState(false);
+
+  const demos = [
+    {role:"mother",  u:"mother1",  p:"pass"},
+    {role:"nurse",   u:"nurse1",   p:"pass"},
+    {role:"chef",    u:"chef1",    p:"pass"},
+    {role:"cleaner", u:"cleaner1", p:"pass"},
+    {role:"sales",   u:"sales1",   p:"pass"},
+    {role:"admin",   u:"admin",    p:"admin"},
+  ];
+
+  const tryLogin = async (user, pass) => {
+    setLoading(true); setErr("");
+    try {
+      const data = await post("/api/auth/login", { username: user, password: pass });
+      onLogin(data.user, data.token);
+    } catch (e) {
+      setErr(e.message);
+    } finally { setLoading(false); }
+  };
+
+  return (
+    <div className="min-h-screen bg-gradient-to-br from-rose-50 via-pink-50 to-purple-50 flex items-center justify-center p-4">
+      <div className="w-full max-w-sm">
+        <div className="text-center mb-8">
+          <div className="text-5xl mb-3">🌸</div>
+          <h1 className="text-2xl font-bold text-gray-800">月子中心</h1>
+          <p className="text-gray-500 text-sm mt-1">Confinement Care Centre</p>
+        </div>
+        <Card>
+          <h2 className="text-base font-semibold text-gray-800 mb-4">Sign In</h2>
+          <div className="space-y-3">
+            <Field label="Username"><Inp type="text" value={u} onChange={e=>setU(e.target.value)} placeholder="Enter username" /></Field>
+            <Field label="Password"><Inp type="password" value={p} onChange={e=>setP(e.target.value)} onKeyDown={e=>e.key==="Enter"&&tryLogin(u,p)} placeholder="Enter password" /></Field>
+            {err && <Alert msg={err} type="error" />}
+            <Btn onClick={()=>tryLogin(u,p)} color="rose" cls={loading?"opacity-60 cursor-not-allowed":""}>{loading ? "Signing in…" : "Sign In"}</Btn>
+          </div>
+          <div className="mt-4 text-center">
+            <button onClick={()=>setShowDemo(!showDemo)} className="text-xs text-gray-400 underline">{showDemo?"Hide":"Show"} demo accounts</button>
+            {showDemo && (
+              <div className="mt-3 space-y-1.5">
+                {demos.map(d => (
+                  <button key={d.role} onClick={()=>{ setU(d.u); setP(d.p); tryLogin(d.u,d.p); }}
+                    className={`w-full text-left text-xs px-3 py-2 rounded-xl border ${ROLE[d.role].border} ${ROLE[d.role].light} ${ROLE[d.role].text} hover:opacity-80`}>
+                    <span className="font-semibold">{ROLE[d.role].label}</span>
+                    <span className="text-gray-400 ml-2">{d.u} / {d.p}</span>
+                  </button>
+                ))}
+              </div>
+            )}
+          </div>
+        </Card>
+      </div>
+    </div>
+  );
+}
+
+// ─────────────────────────────────────────────
+// MOTHER DASHBOARD
+// ─────────────────────────────────────────────
+function MotherDashboard({ user, token, onLogout }) {
+  const [tab, setTab] = useState("meal");
+  const [mother, setMother] = useState(null);
+  const [unread, setUnread] = useState(0);
+
+  useEffect(() => {
+    get("/api/mothers", token).then(ms => setMother(ms.find(m => m.id === user.mother_id)));
+    get(`/api/notes/${user.mother_id}`, token).then(ns => setUnread(ns.filter(n=>!n.is_read).length));
+  }, []);
+
+  const tabs = [
+    {id:"meal",icon:"🍽️",label:"Meal Plan"},
+    {id:"feeding",icon:"🍼",label:"Feeding"},
+    {id:"bowel",icon:"💩",label:"Bowel"},
+    {id:"jaundice",icon:"📊",label:"Jaundice"},
+    {id:"activities",icon:"🧘",label:"Activities"},
+    {id:"notes",icon:"📩",label:`Notes${unread>0?` (${unread})`:""}`},
+  ];
+
+  return (
+    <div className="min-h-screen bg-gray-50">
+      <Navbar user={user} onLogout={onLogout} title="月子中心 Care" />
+      {mother && (
+        <div className="bg-rose-400 text-white px-4 py-2 text-xs flex gap-4 flex-wrap">
+          <span>🏠 Room {mother.room}</span>
+          <span>👶 {mother.baby_name}</span>
+          <span>🎂 DOB: {mother.baby_dob}</span>
+          <span>📅 Check-out: {mother.check_out}</span>
+        </div>
+      )}
+      <TabBar tabs={tabs} active={tab} onChange={setTab} activeClass={ROLE.mother.active} />
+      <div className="pb-6">
+        {tab==="meal"       && <MotherMeal        user={user} token={token} />}
+        {tab==="feeding"    && <MotherFeeding     user={user} token={token} />}
+        {tab==="bowel"      && <MotherBowel       user={user} token={token} />}
+        {tab==="jaundice"   && <MotherJaundice    user={user} token={token} />}
+        {tab==="activities" && <MotherActivities  user={user} token={token} />}
+        {tab==="notes"      && <MotherNotes       user={user} token={token} onUnread={setUnread} />}
+      </div>
+    </div>
+  );
+}
+
+function MotherMeal({ user, token }) {
+  const [plan, setPlan] = useState(null);
+  const [day, setDay] = useState(0);
+  const DAYS = ["Mon","Tue","Wed","Thu","Fri","Sat","Sun"];
+  useEffect(() => { get(`/api/meal-plans/${user.mother_id}`, token).then(setPlan); }, []);
+  if (!plan) return <Spinner />;
+  const meal = plan.meals[day];
+  return (
+    <div className="p-4 space-y-4">
+      <div className="flex gap-1.5 overflow-x-auto pb-1">
+        {DAYS.map((d,i) => <button key={d} onClick={()=>setDay(i)} className={`flex-shrink-0 w-11 h-11 rounded-full text-xs font-medium ${day===i?"bg-rose-500 text-white shadow-md":"bg-white text-gray-600 border border-gray-200"}`}>{d}</button>)}
+      </div>
+      <Card>
+        <p className="text-xs text-gray-400 mb-3">{plan.week}</p>
+        {[["🌅 Breakfast","breakfast"],["☀️ Lunch","lunch"],["🌙 Dinner","dinner"],["🍵 Snack","snack"]].map(([l,k]) => (
+          <div key={k} className="mb-3 last:mb-0 pb-3 last:pb-0 border-b last:border-0 border-gray-50">
+            <p className="text-xs text-gray-400 font-semibold">{l}</p>
+            <p className="text-sm text-gray-800 mt-0.5">{meal[k]}</p>
+          </div>
+        ))}
+      </Card>
+    </div>
+  );
+}
+
+function MotherFeeding({ user, token }) {
+  const [records, setRecords] = useState(null);
+  useEffect(() => { get(`/api/feeding/${user.mother_id}?filter_date=2026-03-07`, token).then(setRecords); }, []);
+  if (!records) return <Spinner />;
+  const total = records.reduce((s,r) => s+parseInt(r.amount||0), 0);
+  return (
+    <div className="p-4 space-y-3">
+      <Card className="bg-rose-50 border-rose-100">
+        <p className="text-xs text-rose-500 font-medium">Today's Total Intake</p>
+        <p className="text-2xl font-bold text-rose-600">{total} ml</p>
+        <p className="text-xs text-gray-400">{records.length} sessions</p>
+      </Card>
+      <SectionTitle>Feeding Records</SectionTitle>
+      {records.length===0 ? <p className="text-gray-400 text-sm">No records for today.</p> :
+        records.map(r => (
+          <Card key={r.id}>
+            <div className="flex justify-between">
+              <div>
+                <p className="text-sm font-semibold text-gray-800">🕐 {r.time}</p>
+                <p className="text-xs text-gray-500">{r.type} · {r.amount} ml{r.duration?` · ${r.duration} mins`:""}</p>
+                {r.notes && <p className="text-xs text-rose-500 mt-1">📝 {r.notes}</p>}
+              </div>
+              <span className="text-2xl">🍼</span>
+            </div>
+          </Card>
+        ))
+      }
+    </div>
+  );
+}
+
+function MotherBowel({ user, token }) {
+  const [records, setRecords] = useState(null);
+  const colorEmoji = {Yellow:"🟡",Green:"🟢",Brown:"🟤",Black:"⚫",White:"⚪"};
+  useEffect(() => { get(`/api/bowel/${user.mother_id}?filter_date=2026-03-07`, token).then(setRecords); }, []);
+  if (!records) return <Spinner />;
+  return (
+    <div className="p-4 space-y-3">
+      <Card className="bg-amber-50 border-amber-100">
+        <p className="text-xs text-amber-600 font-medium">Today's Bowel Movements</p>
+        <p className="text-2xl font-bold text-amber-600">{records.length}</p>
+        <p className="text-xs text-gray-400">times recorded</p>
+      </Card>
+      <SectionTitle>Records</SectionTitle>
+      {records.length===0 ? <p className="text-gray-400 text-sm">No records for today.</p> :
+        records.map(r => (
+          <Card key={r.id}>
+            <p className="text-sm font-semibold text-gray-800">🕐 {r.time}</p>
+            <p className="text-xs text-gray-500">{colorEmoji[r.color]||"🟡"} {r.color} · {r.consistency}</p>
+            {r.notes && <p className="text-xs text-gray-400 mt-1">📝 {r.notes}</p>}
+          </Card>
+        ))
+      }
+    </div>
+  );
+}
+
+function MotherJaundice({ user, token }) {
+  const [records, setRecords] = useState(null);
+  useEffect(() => { get(`/api/jaundice/${user.mother_id}`, token).then(setRecords); }, []);
+  if (!records) return <Spinner />;
+  const latest = records[records.length-1];
+  const chart = records.map(r => ({ date: r.date.slice(5), level: r.level }));
+  const status = l => l<10 ? {label:"Normal ✅",cls:"text-green-600 bg-green-50"} : l<15 ? {label:"Monitor ⚠️",cls:"text-yellow-600 bg-yellow-50"} : {label:"High 🔴",cls:"text-red-600 bg-red-50"};
+  return (
+    <div className="p-4 space-y-4">
+      {latest && (
+        <Card>
+          <p className="text-xs text-gray-400 mb-1">Latest · {latest.date}</p>
+          <div className="flex items-end gap-2">
+            <span className="text-4xl font-bold text-gray-800">{latest.level}</span>
+            <span className="text-sm text-gray-500 mb-1">mg/dL</span>
+          </div>
+          <span className={`inline-block mt-1 text-xs font-semibold px-3 py-1 rounded-full ${status(latest.level).cls}`}>{status(latest.level).label}</span>
+          {latest.notes && <p className="text-xs text-gray-400 mt-2">📝 {latest.notes}</p>}
+        </Card>
+      )}
+      <Card>
+        <SectionTitle>7-Day Trend</SectionTitle>
+        <SimpleLineChart
+          data={chart}
+          dataKey="level"
+          color="#f43f5e"
+          referenceLines={[
+            {y:15, color:"#ef4444", label:"High"},
+            {y:10, color:"#f59e0b", label:"Normal"},
+          ]}
+        />
+        <div className="flex gap-4 mt-2 text-xs text-gray-400">
+          <span className="flex items-center gap-1"><span className="inline-block w-4 border-t-2 border-yellow-400"></span> 10 mg/dL (normal)</span>
+          <span className="flex items-center gap-1"><span className="inline-block w-4 border-t-2 border-red-400"></span> 15 mg/dL (high)</span>
+        </div>
+      </Card>
+      <SectionTitle>All Readings</SectionTitle>
+      {[...records].reverse().map(r => {
+        const s = status(r.level);
+        return (
+          <Card key={r.id}>
+            <div className="flex justify-between items-center">
+              <span className="text-xs text-gray-500">{r.date}</span>
+              <span className="font-semibold text-gray-800">{r.level} mg/dL</span>
+              <span className={`text-xs font-medium px-2 py-0.5 rounded-full ${s.cls}`}>{s.label}</span>
+            </div>
+          </Card>
+        );
+      })}
+    </div>
+  );
+}
+
+function MotherActivities({ user, token }) {
+  const [activities, setActivities] = useState([]);
+  const [bookings, setBookings] = useState([]);
+  const [booking, setBooking] = useState(null);
+  const [bDate, setBDate] = useState("");
+  const [msg, setMsg] = useState("");
+
+  const load = () => Promise.all([
+    get("/api/activities", token).then(setActivities),
+    get(`/api/bookings/${user.mother_id}`, token).then(setBookings),
+  ]);
+  useEffect(() => { load(); }, []);
+
+  const confirm = async () => {
+    if (!bDate) return;
+    await post("/api/bookings", { mother_id: user.mother_id, activity_id: booking.id, date: bDate }, token);
+    setMsg(`Booked: ${booking.name} on ${bDate}`);
+    setBooking(null); setBDate("");
+    load();
+    setTimeout(()=>setMsg(""), 4000);
+  };
+
+  const isBooked = id => bookings.some(b=>b.activity_id===id);
+
+  return (
+    <div className="p-4 space-y-3">
+      <Alert msg={msg} />
+      <SectionTitle>Available Activities</SectionTitle>
+      {activities.map(a => (
+        <Card key={a.id}>
+          <div className="flex justify-between items-center">
+            <div>
+              <p className="text-sm font-semibold text-gray-800">{a.icon} {a.name}</p>
+              <p className="text-xs text-gray-400">🕐 {a.time} · {a.duration} · {a.days}</p>
+            </div>
+            {isBooked(a.id)
+              ? <span className="text-xs bg-green-100 text-green-600 px-3 py-1 rounded-full font-medium">Booked</span>
+              : <button onClick={()=>setBooking(a)} className="text-xs bg-rose-500 text-white px-3 py-1.5 rounded-full">Book</button>
+            }
+          </div>
+        </Card>
+      ))}
+      {bookings.length>0 && (
+        <>
+          <SectionTitle>My Bookings</SectionTitle>
+          {bookings.map(b => {
+            const act = activities.find(a=>a.id===b.activity_id);
+            return (
+              <Card key={b.id}>
+                <div className="flex justify-between items-center">
+                  <div>
+                    <p className="text-sm font-semibold text-gray-800">{act?.icon} {act?.name}</p>
+                    <p className="text-xs text-gray-400">{b.date}</p>
+                  </div>
+                  <Badge status={b.status} />
+                </div>
+              </Card>
+            );
+          })}
+        </>
+      )}
+      {booking && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
+          <div className="bg-white rounded-2xl p-5 w-full max-w-sm">
+            <h3 className="font-bold mb-1">{booking.icon} {booking.name}</h3>
+            <p className="text-xs text-gray-400 mb-4">{booking.time} · {booking.duration}</p>
+            <Field label="Select Date"><Inp type="date" value={bDate} onChange={e=>setBDate(e.target.value)} min="2026-03-07" /></Field>
+            <div className="flex gap-2 mt-4">
+              <button onClick={()=>setBooking(null)} className="flex-1 border border-gray-200 text-gray-600 rounded-xl py-2 text-sm">Cancel</button>
+              <button onClick={confirm} className="flex-1 bg-rose-500 text-white rounded-xl py-2 text-sm font-medium">Confirm</button>
+            </div>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
+function MotherNotes({ user, token, onUnread }) {
+  const [notes, setNotes] = useState([]);
+  const load = () => get(`/api/notes/${user.mother_id}`, token).then(n => { setNotes(n); onUnread(n.filter(x=>!x.is_read).length); });
+  useEffect(() => { load(); }, []);
+  const markRead = async id => { await patch(`/api/notes/${id}/read`, {}, token); load(); };
+  return (
+    <div className="p-4 space-y-3">
+      <SectionTitle>Messages from Care Team</SectionTitle>
+      {notes.length===0 ? <p className="text-gray-400 text-sm">No messages yet.</p> :
+        notes.map(n => (
+          <Card key={n.id} className={n.is_read?"":"border-rose-200 bg-rose-50"}>
+            <div className="flex justify-between">
+              <div className="flex-1">
+                <p className="text-xs text-gray-400">From: {n.from_name} · {n.date}</p>
+                <p className="text-sm text-gray-800 mt-1">{n.message}</p>
+              </div>
+              {!n.is_read && <button onClick={()=>markRead(n.id)} className="text-xs text-rose-500 ml-3 underline flex-shrink-0">Mark read</button>}
+            </div>
+          </Card>
+        ))
+      }
+    </div>
+  );
+}
+
+// ─────────────────────────────────────────────
+// NURSE DASHBOARD
+// ─────────────────────────────────────────────
+function NurseDashboard({ user, token, onLogout }) {
+  const [tab, setTab] = useState("patients");
+  const tabs = [
+    {id:"patients",icon:"👩",label:"Patients"},
+    {id:"vitals",icon:"📏",label:"Vitals"},
+    {id:"feeding",icon:"🍼",label:"Feeding"},
+    {id:"bowel",icon:"💩",label:"Bowel"},
+    {id:"jaundice",icon:"📊",label:"Jaundice"},
+    {id:"notes",icon:"📩",label:"Send Note"},
+  ];
+  return (
+    <div className="min-h-screen bg-gray-50">
+      <Navbar user={user} onLogout={onLogout} title="Nurse Portal" />
+      <TabBar tabs={tabs} active={tab} onChange={setTab} activeClass={ROLE.nurse.active} />
+      <div className="pb-6">
+        {tab==="patients" && <NursePatients token={token} />}
+        {tab==="vitals"   && <NurseVitals   token={token} />}
+        {tab==="feeding"  && <NurseFeeding  token={token} />}
+        {tab==="bowel"    && <NurseBowel    token={token} />}
+        {tab==="jaundice" && <NurseJaundice token={token} />}
+        {tab==="notes"    && <NurseNotes    user={user} token={token} />}
+      </div>
+    </div>
+  );
+}
+
+function NursePatients({ token }) {
+  const [mothers, setMothers] = useState([]);
+  const [feeding, setFeeding] = useState([]);
+  const [jaundice, setJaundice] = useState([]);
+  useEffect(() => {
+    get("/api/mothers", token).then(setMothers);
+    get("/api/feeding?filter_date=2026-03-07", token).then(setFeeding);
+  }, []);
+  return (
+    <div className="p-4 space-y-3">
+      <SectionTitle>Current Patients ({mothers.length})</SectionTitle>
+      {mothers.map(m => {
+        const feeds = feeding.filter(f=>f.mother_id===m.id).length;
+        return (
+          <Card key={m.id}>
+            <div className="flex justify-between">
+              <div>
+                <p className="font-bold text-gray-800">{m.name}</p>
+                <p className="text-xs text-gray-500">Room {m.room} · {m.baby_name}</p>
+                <p className="text-xs text-gray-400">Baby DOB: {m.baby_dob}</p>
+              </div>
+              <span className="text-3xl">👶</span>
+            </div>
+            <div className="flex gap-2 mt-2">
+              <span className="text-xs bg-blue-50 text-blue-600 px-2 py-1 rounded-full">🍼 {feeds} feeds today</span>
+            </div>
+          </Card>
+        );
+      })}
+    </div>
+  );
+}
+
+function NurseVitals({ token }) {
+  const [mothers, setMothers] = useState([]);
+  const [recent, setRecent] = useState([]);
+  const [f, setF] = useState({ mother_id:"", weight:"", height:"", head_circ:"", shower_time:"", notes:"" });
+  const [msg, setMsg] = useState({text:"",type:"success"});
+  useEffect(() => { get("/api/mothers", token).then(m => { setMothers(m); setF(p=>({...p, mother_id:String(m[0]?.id||"")})); }); loadRecent(); }, []);
+  const loadRecent = () => get("/api/vitals", token).then(v => setRecent(v?.slice(0,5)||[])).catch(()=>{});
+  const save = async () => {
+    if (!f.weight||!f.height) return;
+    try {
+      await post("/api/vitals", {...f, mother_id:parseInt(f.mother_id), date:"2026-03-07"}, token);
+      setMsg({text:"Vitals recorded!",type:"success"});
+      setF(p=>({...p,weight:"",height:"",head_circ:"",shower_time:"",notes:""}));
+      loadRecent();
+    } catch(e) { setMsg({text:e.message,type:"error"}); }
+    setTimeout(()=>setMsg({text:"",type:"success"}),3000);
+  };
+  return (
+    <div className="p-4 space-y-4">
+      <SectionTitle>Record Baby Vitals</SectionTitle>
+      <Alert msg={msg.text} type={msg.type} />
+      <Card>
+        <div className="space-y-3">
+          <Field label="Patient"><Sel value={f.mother_id} onChange={e=>setF({...f,mother_id:e.target.value})}>{mothers.map(m=><option key={m.id} value={m.id}>{m.name} — {m.baby_name}</option>)}</Sel></Field>
+          <Field label="Weight (kg)"><Inp type="number" step="0.01" value={f.weight} placeholder="3.5" onChange={e=>setF({...f,weight:e.target.value})} /></Field>
+          <Field label="Height (cm)"><Inp type="number" step="0.1" value={f.height} placeholder="51.0" onChange={e=>setF({...f,height:e.target.value})} /></Field>
+          <Field label="Head Circumference (cm)"><Inp type="number" step="0.1" value={f.head_circ} placeholder="34.5" onChange={e=>setF({...f,head_circ:e.target.value})} /></Field>
+          <Field label="Shower Time"><Inp type="time" value={f.shower_time} onChange={e=>setF({...f,shower_time:e.target.value})} /></Field>
+          <Field label="Notes"><Txt rows={2} value={f.notes} onChange={e=>setF({...f,notes:e.target.value})} /></Field>
+          <Btn color="blue" onClick={save}>Save Vitals</Btn>
+        </div>
+      </Card>
+    </div>
+  );
+}
+
+function NurseFeeding({ token }) {
+  const [mothers, setMothers] = useState([]);
+  const [records, setRecords] = useState([]);
+  const [f, setF] = useState({ mother_id:"", time:"", type:"Breast milk", amount:"", duration:"", notes:"" });
+  const [msg, setMsg] = useState({text:"",type:"success"});
+  useEffect(() => { get("/api/mothers", token).then(m => { setMothers(m); setF(p=>({...p,mother_id:String(m[0]?.id||"")})); }); loadRecords(); }, []);
+  const loadRecords = () => get("/api/feeding?filter_date=2026-03-07", token).then(setRecords);
+  const save = async () => {
+    if (!f.time||!f.amount) return;
+    try {
+      await post("/api/feeding", {...f, mother_id:parseInt(f.mother_id), date:"2026-03-07"}, token);
+      setMsg({text:"Feeding record saved!",type:"success"});
+      setF(p=>({...p,time:"",amount:"",duration:"",notes:""}));
+      loadRecords();
+    } catch(e) { setMsg({text:e.message,type:"error"}); }
+    setTimeout(()=>setMsg({text:"",type:"success"}),3000);
+  };
+  return (
+    <div className="p-4 space-y-4">
+      <SectionTitle>Record Feeding</SectionTitle>
+      <Alert msg={msg.text} type={msg.type} />
+      <Card>
+        <div className="space-y-3">
+          <Field label="Patient"><Sel value={f.mother_id} onChange={e=>setF({...f,mother_id:e.target.value})}>{mothers.map(m=><option key={m.id} value={m.id}>{m.name} — {m.baby_name}</option>)}</Sel></Field>
+          <Field label="Type"><Sel value={f.type} onChange={e=>setF({...f,type:e.target.value})}>{["Breast milk","Formula","Mixed"].map(t=><option key={t}>{t}</option>)}</Sel></Field>
+          <Field label="Time"><Inp type="time" value={f.time} onChange={e=>setF({...f,time:e.target.value})} /></Field>
+          <Field label="Amount (ml)"><Inp type="number" value={f.amount} placeholder="90" onChange={e=>setF({...f,amount:e.target.value})} /></Field>
+          <Field label="Duration (mins, optional)"><Inp type="number" value={f.duration} placeholder="15" onChange={e=>setF({...f,duration:e.target.value})} /></Field>
+          <Field label="Notes"><Txt rows={2} value={f.notes} onChange={e=>setF({...f,notes:e.target.value})} /></Field>
+          <Btn color="blue" onClick={save}>Save Record</Btn>
+        </div>
+      </Card>
+      <SectionTitle>Today's Records</SectionTitle>
+      {records.map(r => {
+        const m = mothers.find(x=>x.id===r.mother_id);
+        return <Card key={r.id}><p className="text-xs text-gray-400">{r.time} · {m?.baby_name}</p><p className="text-sm text-gray-700">{r.type} · {r.amount} ml</p></Card>;
+      })}
+    </div>
+  );
+}
+
+function NurseBowel({ token }) {
+  const [mothers, setMothers] = useState([]);
+  const [f, setF] = useState({ mother_id:"", time:"", color:"Yellow", consistency:"Soft", notes:"" });
+  const [msg, setMsg] = useState({text:"",type:"success"});
+  useEffect(() => { get("/api/mothers", token).then(m => { setMothers(m); setF(p=>({...p,mother_id:String(m[0]?.id||"")})); }); }, []);
+  const save = async () => {
+    if (!f.time) return;
+    try { await post("/api/bowel", {...f,mother_id:parseInt(f.mother_id),date:"2026-03-07"}, token); setMsg({text:"Bowel record saved!",type:"success"}); setF(p=>({...p,time:"",notes:""})); }
+    catch(e) { setMsg({text:e.message,type:"error"}); }
+    setTimeout(()=>setMsg({text:"",type:"success"}),3000);
+  };
+  return (
+    <div className="p-4 space-y-4">
+      <SectionTitle>Record Bowel Movement</SectionTitle>
+      <Alert msg={msg.text} type={msg.type} />
+      <Card>
+        <div className="space-y-3">
+          <Field label="Patient"><Sel value={f.mother_id} onChange={e=>setF({...f,mother_id:e.target.value})}>{mothers.map(m=><option key={m.id} value={m.id}>{m.name} — {m.baby_name}</option>)}</Sel></Field>
+          <Field label="Time"><Inp type="time" value={f.time} onChange={e=>setF({...f,time:e.target.value})} /></Field>
+          <Field label="Color"><Sel value={f.color} onChange={e=>setF({...f,color:e.target.value})}>{["Yellow","Green","Brown","Black","White"].map(c=><option key={c}>{c}</option>)}</Sel></Field>
+          <Field label="Consistency"><Sel value={f.consistency} onChange={e=>setF({...f,consistency:e.target.value})}>{["Soft","Loose","Watery","Hard","Normal"].map(c=><option key={c}>{c}</option>)}</Sel></Field>
+          <Field label="Notes"><Txt rows={2} value={f.notes} onChange={e=>setF({...f,notes:e.target.value})} /></Field>
+          <Btn color="blue" onClick={save}>Save Record</Btn>
+        </div>
+      </Card>
+    </div>
+  );
+}
+
+function NurseJaundice({ token }) {
+  const [mothers, setMothers] = useState([]);
+  const [f, setF] = useState({ mother_id:"", level:"", notes:"" });
+  const [msg, setMsg] = useState({text:"",type:"success"});
+  useEffect(() => { get("/api/mothers", token).then(m => { setMothers(m); setF(p=>({...p,mother_id:String(m[0]?.id||"")})); }); }, []);
+  const save = async () => {
+    if (!f.level) return;
+    try { await post("/api/jaundice", {...f,mother_id:parseInt(f.mother_id),date:"2026-03-07",level:parseFloat(f.level)}, token); setMsg({text:"Jaundice level saved!",type:"success"}); setF(p=>({...p,level:"",notes:""})); }
+    catch(e) { setMsg({text:e.message,type:"error"}); }
+    setTimeout(()=>setMsg({text:"",type:"success"}),3000);
+  };
+  return (
+    <div className="p-4 space-y-4">
+      <SectionTitle>Record Jaundice Level</SectionTitle>
+      <Alert msg={msg.text} type={msg.type} />
+      <Card className="bg-yellow-50 border-yellow-200"><p className="text-xs text-yellow-700">✅ Normal: &lt;10 · ⚠️ Monitor: 10–15 · 🔴 High: &gt;15 mg/dL</p></Card>
+      <Card>
+        <div className="space-y-3">
+          <Field label="Patient"><Sel value={f.mother_id} onChange={e=>setF({...f,mother_id:e.target.value})}>{mothers.map(m=><option key={m.id} value={m.id}>{m.name} — {m.baby_name}</option>)}</Sel></Field>
+          <Field label="Level (mg/dL)"><Inp type="number" step="0.1" value={f.level} placeholder="12.5" onChange={e=>setF({...f,level:e.target.value})} /></Field>
+          <Field label="Notes"><Txt rows={2} value={f.notes} onChange={e=>setF({...f,notes:e.target.value})} /></Field>
+          <Btn color="blue" onClick={save}>Save Reading</Btn>
+        </div>
+      </Card>
+    </div>
+  );
+}
+
+function NurseNotes({ user, token }) {
+  const [mothers, setMothers] = useState([]);
+  const [sent, setSent] = useState([]);
+  const [f, setF] = useState({ to_mother_id:"", message:"" });
+  const [msg, setMsg] = useState({text:"",type:"success"});
+  useEffect(() => { get("/api/mothers", token).then(m => { setMothers(m); setF(p=>({...p,to_mother_id:String(m[0]?.id||"")})); }); loadSent(); }, []);
+  const loadSent = () => get(`/api/notes/sent/${user.id}`, token).then(setSent).catch(()=>{});
+  const send = async () => {
+    if (!f.message.trim()) return;
+    try { await post("/api/notes", {...f,to_mother_id:parseInt(f.to_mother_id),date:"2026-03-07"}, token); setMsg({text:"Note sent!",type:"success"}); setF(p=>({...p,message:""})); loadSent(); }
+    catch(e) { setMsg({text:e.message,type:"error"}); }
+    setTimeout(()=>setMsg({text:"",type:"success"}),3000);
+  };
+  return (
+    <div className="p-4 space-y-4">
+      <SectionTitle>Send Note to Mother</SectionTitle>
+      <Alert msg={msg.text} type={msg.type} />
+      <Card>
+        <div className="space-y-3">
+          <Field label="Send To"><Sel value={f.to_mother_id} onChange={e=>setF({...f,to_mother_id:e.target.value})}>{mothers.map(m=><option key={m.id} value={m.id}>{m.name} — Room {m.room}</option>)}</Sel></Field>
+          <Field label="Message"><Txt rows={4} value={f.message} placeholder="Write care note here..." onChange={e=>setF({...f,message:e.target.value})} /></Field>
+          <Btn color="blue" onClick={send}>Send Note</Btn>
+        </div>
+      </Card>
+      {sent.length>0 && (<>
+        <SectionTitle>Sent Notes</SectionTitle>
+        {sent.map(n=><Card key={n.id}><p className="text-xs text-gray-400">To: {n.mother_name} · {n.date}</p><p className="text-sm text-gray-700 mt-1">{n.message}</p><p className="text-xs mt-1">{n.is_read?"✅ Read":"🕐 Unread"}</p></Card>)}
+      </>)}
+    </div>
+  );
+}
+
+// ─────────────────────────────────────────────
+// CHEF DASHBOARD
+// ─────────────────────────────────────────────
+function ChefDashboard({ user, token, onLogout }) {
+  const [tab, setTab] = useState("meal");
+  const tabs = [{id:"meal",icon:"🍽️",label:"Meal Plans"},{id:"receipts",icon:"🧾",label:"Receipts"},{id:"inventory",icon:"📦",label:"Inventory"}];
+  return (
+    <div className="min-h-screen bg-gray-50">
+      <Navbar user={user} onLogout={onLogout} title="Chef Portal" />
+      <TabBar tabs={tabs} active={tab} onChange={setTab} activeClass={ROLE.chef.active} />
+      <div className="pb-6">
+        {tab==="meal"      && <ChefMeal      token={token} />}
+        {tab==="receipts"  && <ChefReceipts  user={user} token={token} />}
+        {tab==="inventory" && <ChefInventory token={token} />}
+      </div>
+    </div>
+  );
+}
+
+function ChefMeal({ token }) {
+  const [mothers, setMothers] = useState([]);
+  const [motherId, setMotherId] = useState(1);
+  const [plan, setPlan] = useState(null);
+  const [day, setDay] = useState(0);
+  const [editing, setEditing] = useState(false);
+  const [form, setForm] = useState({});
+  const [msg, setMsg] = useState({text:"",type:"success"});
+  const DAYS = ["Mon","Tue","Wed","Thu","Fri","Sat","Sun"];
+  useEffect(() => { get("/api/mothers", token).then(m => { setMothers(m); if(m[0]) setMotherId(m[0].id); }); }, []);
+  useEffect(() => { get(`/api/meal-plans/${motherId}`, token).then(setPlan); }, [motherId]);
+  const meal = plan?.meals[day];
+  const startEdit = () => { setForm({...meal}); setEditing(true); };
+  const saveEdit = async () => {
+    try { await put(`/api/meal-plans/${motherId}/${day}`, form, token); setMsg({text:"Meal plan updated!",type:"success"}); setEditing(false); get(`/api/meal-plans/${motherId}`, token).then(setPlan); }
+    catch(e) { setMsg({text:e.message,type:"error"}); }
+    setTimeout(()=>setMsg({text:"",type:"success"}),3000);
+  };
+  return (
+    <div className="p-4 space-y-4">
+      <SectionTitle>Meal Plans</SectionTitle>
+      <Alert msg={msg.text} type={msg.type} />
+      <Field label="Mother"><Sel value={motherId} onChange={e=>setMotherId(parseInt(e.target.value))}>{mothers.map(m=><option key={m.id} value={m.id}>{m.name} — Room {m.room}</option>)}</Sel></Field>
+      <div className="flex gap-1.5 overflow-x-auto pb-1">
+        {DAYS.map((d,i)=><button key={d} onClick={()=>{setDay(i);setEditing(false);}} className={`flex-shrink-0 w-11 h-11 rounded-full text-xs font-medium ${day===i?"bg-orange-500 text-white shadow-md":"bg-white text-gray-600 border border-gray-200"}`}>{d}</button>)}
+      </div>
+      {meal && !editing && (
+        <Card>
+          <div className="flex justify-between items-center mb-3">
+            <h3 className="font-bold text-gray-700">{DAYS[day]}</h3>
+            <button onClick={startEdit} className="text-xs text-orange-500 border border-orange-300 px-3 py-1 rounded-full">✏️ Edit</button>
+          </div>
+          {[["🌅 Breakfast","breakfast"],["☀️ Lunch","lunch"],["🌙 Dinner","dinner"],["🍵 Snack","snack"]].map(([l,k])=>(
+            <div key={k} className="mb-3 last:mb-0 pb-3 last:pb-0 border-b last:border-0 border-gray-50">
+              <p className="text-xs text-gray-400 font-semibold">{l}</p>
+              <p className="text-sm text-gray-800 mt-0.5">{meal[k]}</p>
+            </div>
+          ))}
+        </Card>
+      )}
+      {meal && editing && (
+        <Card>
+          <h3 className="font-bold text-gray-700 mb-3">Edit {DAYS[day]}</h3>
+          {[["🌅 Breakfast","breakfast"],["☀️ Lunch","lunch"],["🌙 Dinner","dinner"],["🍵 Snack","snack"]].map(([l,k])=>(
+            <div key={k} className="mb-3"><Field label={l}><Inp type="text" value={form[k]||""} onChange={e=>setForm({...form,[k]:e.target.value})} /></Field></div>
+          ))}
+          <div className="flex gap-2">
+            <button onClick={()=>setEditing(false)} className="flex-1 border border-gray-200 text-gray-600 rounded-xl py-2 text-sm">Cancel</button>
+            <button onClick={saveEdit} className="flex-1 bg-orange-500 text-white rounded-xl py-2 text-sm font-medium">Save</button>
+          </div>
+        </Card>
+      )}
+    </div>
+  );
+}
+
+function ChefReceipts({ user, token }) {
+  const [receipts, setReceipts] = useState([]);
+  const [f, setF] = useState({ description:"", amount:"", date:"2026-03-07" });
+  const [msg, setMsg] = useState({text:"",type:"success"});
+  const load = () => get("/api/receipts", token).then(setReceipts);
+  useEffect(() => { load(); }, []);
+  const submit = async () => {
+    if (!f.description||!f.amount) return;
+    try { await post("/api/receipts", {...f,amount:parseFloat(f.amount)}, token); setMsg({text:"Receipt submitted!",type:"success"}); setF({description:"",amount:"",date:"2026-03-07"}); load(); }
+    catch(e) { setMsg({text:e.message,type:"error"}); }
+    setTimeout(()=>setMsg({text:"",type:"success"}),3000);
+  };
+  const approved = receipts.filter(r=>r.status==="approved").reduce((s,r)=>s+r.amount,0);
+  return (
+    <div className="p-4 space-y-4">
+      <SectionTitle>Submit Receipt</SectionTitle>
+      <Alert msg={msg.text} type={msg.type} />
+      <Card className="bg-orange-50 border-orange-100"><p className="text-xs text-orange-500 font-medium">Total Approved</p><p className="text-2xl font-bold text-orange-600">RM {approved.toFixed(2)}</p></Card>
+      <Card>
+        <div className="space-y-3">
+          <Field label="Description"><Inp type="text" value={f.description} placeholder="e.g. Ginger and herbs" onChange={e=>setF({...f,description:e.target.value})} /></Field>
+          <Field label="Amount (RM)"><Inp type="number" step="0.01" value={f.amount} placeholder="0.00" onChange={e=>setF({...f,amount:e.target.value})} /></Field>
+          <Field label="Date"><Inp type="date" value={f.date} onChange={e=>setF({...f,date:e.target.value})} /></Field>
+          <Btn color="orange" onClick={submit}>Submit Receipt</Btn>
+        </div>
+      </Card>
+      <SectionTitle>My Receipts</SectionTitle>
+      {receipts.map(r=>(
+        <Card key={r.id}>
+          <div className="flex justify-between items-start">
+            <div><p className="text-sm font-medium text-gray-800">{r.description}</p><p className="text-xs text-gray-400">{r.date}</p></div>
+            <div className="text-right"><p className="font-bold text-orange-600">RM {r.amount.toFixed(2)}</p><Badge status={r.status} /></div>
+          </div>
+        </Card>
+      ))}
+    </div>
+  );
+}
+
+function ChefInventory({ token }) {
+  const [items, setItems] = useState([]);
+  const [adding, setAdding] = useState(false);
+  const [f, setF] = useState({ item:"", quantity:"", unit:"kg", low_alert:"" });
+  const [msg, setMsg] = useState({text:"",type:"success"});
+  const load = () => get("/api/inventory", token).then(setItems);
+  useEffect(() => { load(); }, []);
+  const add = async () => {
+    if (!f.item||!f.quantity) return;
+    try { await post("/api/inventory", {...f,quantity:parseFloat(f.quantity),low_alert:parseFloat(f.low_alert)||0}, token); setMsg({text:`${f.item} added!`,type:"success"}); setF({item:"",quantity:"",unit:"kg",low_alert:""}); setAdding(false); load(); }
+    catch(e) { setMsg({text:e.message,type:"error"}); }
+    setTimeout(()=>setMsg({text:"",type:"success"}),3000);
+  };
+  const low = items.filter(i=>i.quantity<=i.low_alert);
+  return (
+    <div className="p-4 space-y-4">
+      <div className="flex justify-between items-center"><SectionTitle>Inventory</SectionTitle><button onClick={()=>setAdding(!adding)} className="text-xs bg-orange-500 text-white px-3 py-1.5 rounded-full">+ Add</button></div>
+      <Alert msg={msg.text} type={msg.type} />
+      {low.length>0 && <Card className="bg-red-50 border-red-200"><p className="text-xs text-red-600 font-semibold mb-1">⚠️ Low Stock</p>{low.map(i=><p key={i.id} className="text-xs text-red-500">{i.item}: {i.quantity} {i.unit}</p>)}</Card>}
+      {adding && (
+        <Card>
+          <div className="space-y-3">
+            <Field label="Item Name"><Inp type="text" value={f.item} placeholder="e.g. Ginger" onChange={e=>setF({...f,item:e.target.value})} /></Field>
+            <div className="flex gap-2">
+              <div className="flex-1"><Field label="Qty"><Inp type="number" value={f.quantity} onChange={e=>setF({...f,quantity:e.target.value})} /></Field></div>
+              <div className="flex-1"><Field label="Unit"><Sel value={f.unit} onChange={e=>setF({...f,unit:e.target.value})}>{["kg","g","L","ml","bottles","units","packs"].map(u=><option key={u}>{u}</option>)}</Sel></Field></div>
+            </div>
+            <Field label="Low Stock Alert"><Inp type="number" value={f.low_alert} placeholder="0.5" onChange={e=>setF({...f,low_alert:e.target.value})} /></Field>
+            <div className="flex gap-2">
+              <button onClick={()=>setAdding(false)} className="flex-1 border border-gray-200 text-gray-600 rounded-xl py-2 text-sm">Cancel</button>
+              <button onClick={add} className="flex-1 bg-orange-500 text-white rounded-xl py-2 text-sm font-medium">Add</button>
+            </div>
+          </div>
+        </Card>
+      )}
+      {items.map(i=>(
+        <Card key={i.id} className={i.quantity<=i.low_alert?"border-red-200":""}>
+          <div className="flex justify-between items-center">
+            <div><p className="text-sm font-semibold text-gray-800">{i.item}</p>{i.quantity<=i.low_alert&&<p className="text-xs text-red-500">⚠️ Low stock</p>}</div>
+            <div className="text-right"><p className="font-bold text-gray-800">{i.quantity} {i.unit}</p><p className="text-xs text-gray-400">Alert: ≤{i.low_alert}</p></div>
+          </div>
+        </Card>
+      ))}
+    </div>
+  );
+}
+
+// ─────────────────────────────────────────────
+// CLEANER DASHBOARD
+// ─────────────────────────────────────────────
+function CleanerDashboard({ user, onLogout }) {
+  const initTasks = [
+    {id:1,room:"Room 101 — Sarah Chen",task:"Daily room cleaning & sanitise",time:"09:00",done:false},
+    {id:2,room:"Room 102 — Lisa Wong",task:"Daily room cleaning & sanitise",time:"09:30",done:false},
+    {id:3,room:"Common Area",task:"Sanitise waiting & lounge area",time:"11:00",done:false},
+    {id:4,room:"Kitchen",task:"Clean kitchen surfaces & sink",time:"13:00",done:false},
+    {id:5,room:"Bathrooms",task:"Deep clean all bathrooms",time:"14:30",done:false},
+    {id:6,room:"Corridor",task:"Mop corridors & stairways",time:"16:00",done:false},
+  ];
+  const [tasks, setTasks] = useState(initTasks);
+  const done = tasks.filter(t=>t.done).length;
+  return (
+    <div className="min-h-screen bg-gray-50">
+      <Navbar user={user} onLogout={onLogout} title="Cleaner Portal" />
+      <div className="p-4 space-y-4">
+        <Card className="bg-green-50 border-green-200">
+          <p className="text-sm font-semibold text-green-700">Today's Progress</p>
+          <p className="text-3xl font-bold text-green-600 mt-1">{done} / {tasks.length}</p>
+          <div className="mt-2 bg-green-200 rounded-full h-2.5 overflow-hidden"><div className="bg-green-500 h-2.5 rounded-full transition-all" style={{width:`${(done/tasks.length)*100}%`}} /></div>
+        </Card>
+        <SectionTitle>Today's Tasks</SectionTitle>
+        {tasks.map(t=>(
+          <Card key={t.id} className={t.done?"opacity-50":""}>
+            <div className="flex items-center gap-3">
+              <button onClick={()=>setTasks(prev=>prev.map(x=>x.id===t.id?{...x,done:!x.done}:x))} className={`w-7 h-7 rounded-full border-2 flex items-center justify-center flex-shrink-0 ${t.done?"bg-green-500 border-green-500":"border-gray-300"}`}>
+                {t.done && <span className="text-white text-xs font-bold">✓</span>}
+              </button>
+              <div>
+                <p className={`text-sm font-medium ${t.done?"line-through text-gray-400":"text-gray-800"}`}>{t.task}</p>
+                <p className="text-xs text-gray-400">{t.room} · {t.time}</p>
+              </div>
+            </div>
+          </Card>
+        ))}
+      </div>
+    </div>
+  );
+}
+
+// ─────────────────────────────────────────────
+// SALES DASHBOARD
+// ─────────────────────────────────────────────
+function SalesDashboard({ user, onLogout }) {
+  const inquiries = [
+    {id:1,name:"Jennifer Lim",due:"Apr 2026",pkg:"Premium",status:"Interested",phone:"+60 12-345 6789"},
+    {id:2,name:"Rachel Tan",  due:"May 2026",pkg:"Standard",status:"Follow-up", phone:"+60 19-876 5432"},
+    {id:3,name:"Mei Ling Ho", due:"Mar 2026",pkg:"Premium",status:"Confirmed",  phone:"+60 11-234 5678"},
+    {id:4,name:"Amy Cheong",  due:"Jun 2026",pkg:"Standard",status:"Interested",phone:"+60 16-789 0123"},
+  ];
+  const stats = [
+    {label:"New Inquiries",val:"4",icon:"📩",bg:"bg-purple-50",txt:"text-purple-600"},
+    {label:"Follow-ups Due",val:"2",icon:"📞",bg:"bg-yellow-50",txt:"text-yellow-600"},
+    {label:"Confirmed",val:"5",icon:"✅",bg:"bg-green-50",txt:"text-green-600"},
+    {label:"Occupancy",val:"85%",icon:"🏠",bg:"bg-blue-50",txt:"text-blue-600"},
+  ];
+  const sc = {Interested:"bg-blue-100 text-blue-700","Follow-up":"bg-yellow-100 text-yellow-700",Confirmed:"bg-green-100 text-green-700"};
+  return (
+    <div className="min-h-screen bg-gray-50">
+      <Navbar user={user} onLogout={onLogout} title="Sales Portal" />
+      <div className="p-4 space-y-4">
+        <div className="grid grid-cols-2 gap-3">{stats.map(s=><Card key={s.label} className={s.bg}><p className="text-2xl">{s.icon}</p><p className={`text-2xl font-bold mt-1 ${s.txt}`}>{s.val}</p><p className="text-xs text-gray-500">{s.label}</p></Card>)}</div>
+        <SectionTitle>Recent Inquiries</SectionTitle>
+        {inquiries.map(i=>(
+          <Card key={i.id}>
+            <div className="flex justify-between items-start">
+              <div><p className="text-sm font-bold text-gray-800">{i.name}</p><p className="text-xs text-gray-500">Due: {i.due} · {i.pkg}</p><p className="text-xs text-gray-400">{i.phone}</p></div>
+              <span className={`text-xs px-2 py-1 rounded-full font-medium ${sc[i.status]||"bg-gray-100 text-gray-500"}`}>{i.status}</span>
+            </div>
+          </Card>
+        ))}
+      </div>
+    </div>
+  );
+}
+
+// ─────────────────────────────────────────────
+// ADMIN DASHBOARD
+// ─────────────────────────────────────────────
+function AdminDashboard({ user, token, onLogout }) {
+  const [tab, setTab] = useState("overview");
+  const [viewAs, setViewAs] = useState(null);
+  const tabs = [{id:"overview",icon:"📊",label:"Overview"},{id:"users",icon:"👥",label:"Users"},{id:"receipts",icon:"🧾",label:"Receipts"},{id:"viewas",icon:"👁️",label:"View As"}];
+
+  if (viewAs) {
+    const u2 = {...viewAs, onLogout:()=>setViewAs(null)};
+    if (u2.role==="mother")  return <MotherDashboard  user={u2} token={token} onLogout={u2.onLogout} />;
+    if (u2.role==="nurse")   return <NurseDashboard   user={u2} token={token} onLogout={u2.onLogout} />;
+    if (u2.role==="chef")    return <ChefDashboard    user={u2} token={token} onLogout={u2.onLogout} />;
+    if (u2.role==="cleaner") return <CleanerDashboard user={u2} onLogout={u2.onLogout} />;
+    if (u2.role==="sales")   return <SalesDashboard   user={u2} onLogout={u2.onLogout} />;
+  }
+
+  return (
+    <div className="min-h-screen bg-gray-50">
+      <Navbar user={user} onLogout={onLogout} title="Admin Panel" />
+      <TabBar tabs={tabs} active={tab} onChange={setTab} activeClass={ROLE.admin.active} />
+      <div className="pb-6">
+        {tab==="overview" && <AdminOverview  token={token} />}
+        {tab==="users"    && <AdminUsers     token={token} />}
+        {tab==="receipts" && <AdminReceipts  token={token} />}
+        {tab==="viewas"   && <AdminViewAs    token={token} onSelect={setViewAs} />}
+      </div>
+    </div>
+  );
+}
+
+function AdminOverview({ token }) {
+  const [mothers, setMothers] = useState([]);
+  const [users, setUsers]     = useState([]);
+  const [feeding, setFeeding] = useState([]);
+  const [receipts, setReceipts] = useState([]);
+  useEffect(() => {
+    get("/api/mothers",  token).then(setMothers);
+    get("/api/users",    token).then(setUsers);
+    get("/api/feeding?filter_date=2026-03-07", token).then(setFeeding);
+    get("/api/receipts", token).then(setReceipts);
+  }, []);
+  const stats = [
+    {label:"Active Mothers",val:mothers.length,icon:"🤱",bg:"bg-rose-50",  txt:"text-rose-600"},
+    {label:"Total Users",   val:users.length,  icon:"👥",bg:"bg-blue-50",  txt:"text-blue-600"},
+    {label:"Feeds Today",   val:feeding.length, icon:"🍼",bg:"bg-orange-50",txt:"text-orange-600"},
+    {label:"Pending Claims",val:receipts.filter(r=>r.status==="pending").length,icon:"🧾",bg:"bg-yellow-50",txt:"text-yellow-600"},
+  ];
+  return (
+    <div className="p-4 space-y-4">
+      <div className="grid grid-cols-2 gap-3">{stats.map(s=><Card key={s.label} className={s.bg}><p className="text-2xl">{s.icon}</p><p className={`text-3xl font-bold mt-1 ${s.txt}`}>{s.val}</p><p className="text-xs text-gray-500">{s.label}</p></Card>)}</div>
+      <SectionTitle>Patient Overview</SectionTitle>
+      {mothers.map(m=>(
+        <Card key={m.id}>
+          <div className="flex justify-between"><div><p className="font-bold text-gray-800">{m.name}</p><p className="text-xs text-gray-500">Room {m.room} · {m.baby_name}</p><p className="text-xs text-gray-400">Check-out: {m.check_out}</p></div><span className="text-2xl">👶</span></div>
+        </Card>
+      ))}
+    </div>
+  );
+}
+
+function AdminUsers({ token }) {
+  const [users, setUsers] = useState([]);
+  const [adding, setAdding] = useState(false);
+  const [f, setF] = useState({ name:"", username:"", password:"", role:"mother" });
+  const [msg, setMsg] = useState({text:"",type:"success"});
+  const load = () => get("/api/users", token).then(setUsers);
+  useEffect(() => { load(); }, []);
+  const add = async () => {
+    if (!f.name||!f.username||!f.password) return;
+    try { await post("/api/users", f, token); setMsg({text:`User "${f.name}" added!`,type:"success"}); setF({name:"",username:"",password:"",role:"mother"}); setAdding(false); load(); }
+    catch(e) { setMsg({text:e.message,type:"error"}); }
+    setTimeout(()=>setMsg({text:"",type:"success"}),3000);
+  };
+  const changeRole = async (uid, role) => { await patch(`/api/users/${uid}/role`, {role}, token); load(); };
+  return (
+    <div className="p-4 space-y-4">
+      <div className="flex justify-between items-center"><SectionTitle>Users ({users.length})</SectionTitle><button onClick={()=>setAdding(!adding)} className="text-xs bg-gray-700 text-white px-3 py-1.5 rounded-full">+ Add User</button></div>
+      <Alert msg={msg.text} type={msg.type} />
+      {adding && (
+        <Card>
+          <h3 className="text-sm font-bold mb-3">New User</h3>
+          <div className="space-y-3">
+            <Field label="Full Name"><Inp type="text" value={f.name} placeholder="e.g. Sarah Chen" onChange={e=>setF({...f,name:e.target.value})} /></Field>
+            <Field label="Username"><Inp type="text" value={f.username} placeholder="e.g. sarah1" onChange={e=>setF({...f,username:e.target.value})} /></Field>
+            <Field label="Password"><Inp type="text" value={f.password} placeholder="Set password" onChange={e=>setF({...f,password:e.target.value})} /></Field>
+            <Field label="Role"><Sel value={f.role} onChange={e=>setF({...f,role:e.target.value})}>{Object.entries(ROLE).map(([k,v])=><option key={k} value={k}>{v.label}</option>)}</Sel></Field>
+            <div className="flex gap-2"><button onClick={()=>setAdding(false)} className="flex-1 border border-gray-200 text-gray-600 rounded-xl py-2 text-sm">Cancel</button><button onClick={add} className="flex-1 bg-gray-700 text-white rounded-xl py-2 text-sm font-medium">Add User</button></div>
+          </div>
+        </Card>
+      )}
+      {users.map(u=>{const c=ROLE[u.role]; return (
+        <Card key={u.id}>
+          <div className="flex items-center justify-between">
+            <div className="flex items-center gap-3">
+              <div className={`w-10 h-10 rounded-full ${c.bg} flex items-center justify-center text-white font-bold text-sm`}>{u.name[0]}</div>
+              <div><p className="text-sm font-semibold text-gray-800">{u.name}</p><p className="text-xs text-gray-400">@{u.username}</p></div>
+            </div>
+            <select value={u.role} onChange={e=>changeRole(u.id,e.target.value)} className={`text-xs px-2 py-1 rounded-full border ${c.border} ${c.light} ${c.text} focus:outline-none`}>
+              {Object.entries(ROLE).map(([k,v])=><option key={k} value={k}>{v.label}</option>)}
+            </select>
+          </div>
+        </Card>
+      );})}
+    </div>
+  );
+}
+
+function AdminReceipts({ token }) {
+  const [receipts, setReceipts] = useState([]);
+  const load = () => get("/api/receipts", token).then(setReceipts);
+  useEffect(() => { load(); }, []);
+  const update = async (id, status) => { await patch(`/api/receipts/${id}`, {status}, token); load(); };
+  const total = receipts.filter(r=>r.status==="approved").reduce((s,r)=>s+r.amount,0);
+  return (
+    <div className="p-4 space-y-4">
+      <SectionTitle>All Claims & Receipts</SectionTitle>
+      <Card className="bg-green-50 border-green-100"><p className="text-xs text-green-600 font-medium">Total Approved</p><p className="text-2xl font-bold text-green-600">RM {total.toFixed(2)}</p></Card>
+      {receipts.map(r=>(
+        <Card key={r.id}>
+          <div className="flex justify-between items-start mb-2">
+            <div><p className="text-sm font-semibold text-gray-800">{r.description}</p><p className="text-xs text-gray-400">{r.submitter_name} · {r.date}</p></div>
+            <div className="text-right"><p className="font-bold text-orange-600">RM {r.amount.toFixed(2)}</p><Badge status={r.status} /></div>
+          </div>
+          {r.status==="pending" && (
+            <div className="flex gap-2 mt-2">
+              <button onClick={()=>update(r.id,"rejected")}  className="flex-1 border border-red-200 text-red-500 rounded-xl py-1.5 text-xs font-medium">Reject</button>
+              <button onClick={()=>update(r.id,"approved")} className="flex-1 bg-green-500 text-white rounded-xl py-1.5 text-xs font-medium">Approve</button>
+            </div>
+          )}
+        </Card>
+      ))}
+    </div>
+  );
+}
+
+function AdminViewAs({ token, onSelect }) {
+  const [users, setUsers] = useState([]);
+  useEffect(() => { get("/api/users", token).then(u=>setUsers(u.filter(x=>x.role!=="admin"))); }, []);
+  return (
+    <div className="p-4 space-y-3">
+      <SectionTitle>Preview as User</SectionTitle>
+      <p className="text-xs text-gray-400">Tap any user to preview their dashboard</p>
+      {users.map(u=>{const c=ROLE[u.role]; return (
+        <Card key={u.id} className="cursor-pointer" onClick={()=>onSelect(u)}>
+          <div className="flex items-center gap-3">
+            <div className={`w-11 h-11 rounded-full ${c.bg} flex items-center justify-center text-white font-bold`}>{u.name[0]}</div>
+            <div className="flex-1"><p className="text-sm font-semibold text-gray-800">{u.name}</p><span className={`text-xs font-medium ${c.text}`}>{c.label}</span></div>
+            <span className="text-gray-300 text-lg">›</span>
+          </div>
+        </Card>
+      );})}
+    </div>
+  );
+}
+
+// ─────────────────────────────────────────────
+// ROOT APP
+// ─────────────────────────────────────────────
+function App() {
+  const [user, setUser]   = useState(null);
+  const [token, setToken] = useState(null);
+
+  const handleLogin  = (u, t) => { setUser(u); setToken(t); };
+  const handleLogout = ()     => { setUser(null); setToken(null); };
+
+  if (!user) return <Login onLogin={handleLogin} />;
+
+  const props = { user, token, onLogout: handleLogout };
+
+  switch (user.role) {
+    case "mother":  return <MotherDashboard  {...props} />;
+    case "nurse":   return <NurseDashboard   {...props} />;
+    case "chef":    return <ChefDashboard    {...props} />;
+    case "cleaner": return <CleanerDashboard {...props} />;
+    case "sales":   return <SalesDashboard   {...props} />;
+    case "admin":   return <AdminDashboard   {...props} />;
+    default:        return <Login onLogin={handleLogin} />;
+  }
+}
+
+ReactDOM.createRoot(document.getElementById("root")).render(<App />);
+</script>
+</body>
+</html>
